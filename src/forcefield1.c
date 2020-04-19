@@ -60,7 +60,7 @@ double FF_energy(FF *ff, int N, double (*force)[3], double (*position)[3],
                  double *charge, double *weight) {
   // N may change in case of grand canonical simulations
   double *tau = ff->tau;
-  int nu = ff->orderAcc + 1;
+  int nu = ff->orderAcc;
     Vector *r = (Vector *)position;
   Vector *F = (Vector *)force;
   double *wt = (double *)malloc((ff->maxLevel + 1)*sizeof(double));
@@ -172,7 +172,7 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
   // return particle-level energy, calculate forces
   Matrix A = *(Matrix *)ff->A;
   Matrix Ai = *(Matrix *)ff->Ai;
-  int nu = ff->orderAcc + 1;
+  int nu = ff->orderAcc;
   double a_0 = ff->aCut[0];
   double energy = 0.;
   for (int i = 0; i < N; i++) force[i].z = force[i].y = force[i].x = 0.;

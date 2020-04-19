@@ -172,12 +172,10 @@ void FF_build(FF *ff, int N, double edges[3][3]){
   }
   
   // build tau(s) = tau_0 + tau_1*s + ... + tau_{ord-1} *s^{ord-1}
-  ff->orderAcc++ ;
   ff->tau = (double *)malloc(ff->orderAcc*sizeof(double));
   ff->tau[0] = 1.;
   for (int i = 1; i < ff->orderAcc; i++)
     ff->tau[i] = - (1. - 0.5/(double)i)*ff->tau[i-1];
-  ff->orderAcc--;
   
   // build first ord/2 pieces of B-splines Q_ord(t)
   // piece_i(t) = q_i0 + q_i1*(t - i) + ... + q_{i,ord-1}*(t - i)^{ord-1}
@@ -222,41 +220,11 @@ void FF_build(FF *ff, int N, double edges[3][3]){
     for (int j = i; j > -i; j--) J0[j] += J0[j-1];}
   for (int i = -nu/2; i <= nu/2; i++) J0[i] *= pow(2., 1 - nu);
   
-  // set beta and kmax
-  double pi = 4.*atan(1.);
-  double h0 = pow(detA/(double)N, 1./3.);
-  double const_ = ff->tolDir*aL/h0;
-  double beta = 0.; // beta = beta*aL until after iteration
-  double res = erfc(beta) - const_;
-  double oldres = 2.*res;
-  while (fabs(res) < fabs(oldres)){  // Newton-Raphson
-    double dres = -2./sqrt(pi)*exp(-beta*beta);
-    beta -= res/dres;
-    oldres = res;
-    res = erfc(beta) - const_;}
-  beta = beta/aL;
-  ff->beta = beta;
-  const_ = sqrt(pi)*ff->tolRec/(2.*beta*h0);
-  double kmax = 0.; // kmax = pi*kmax/beta until after iteration
-  res = erfc(kmax) - const_;
-  oldres = 2.*res;
-  while (fabs(res) < fabs(oldres)){  // Newton-Raphson
-    double dres = -2./sqrt(pi)*exp(-kmax*kmax);
-    kmax -= res/dres;
-    oldres = res;
-    res = erfc(kmax) - const_;}
-  kmax = beta*kmax/pi;
-  ff->kmax = kmax;
-
-  ff->kLim[0] = (int)(kmax/asx);
-  ff->kLim[1] = (int)(kmax/asy);
-  ff->kLim[2] = (int)(kmax/asz);
-  
   // d^i sigma (1-) = d^i gama(1-) + i * d^(i-1) gama(1-)
   // Implementation of A.1 from periodic.pdf (version 20170811)
-  double *dsigma = malloc(sizeof(double) * 2*nu);
-  double **dgama = (double **)malloc(sizeof(double *)*2*nu);
-  for (int i=0 ; i<2*nu; i++)
+  double *dsigma = malloc(sizeof(double) * (2*nu + 2));
+  double **dgama = (double **)malloc(sizeof(double *)*(2*nu+2));
+  for (int i=0 ; i<2*nu+2; i++)
     dgama[i] = (double *)malloc(sizeof(double)*nu);
   
   for (int k=nu-1;k>=0 ;k--) dgama[0][k] = 1;
@@ -268,10 +236,10 @@ void FF_build(FF *ff, int N, double edges[3][3]){
     }
   }
   dsigma[0] = dgama[0][0];
-  for (int i = 1 ; i <= 2*nu - 1 ; i++)
+  for (int i = 1 ; i <= 2*nu + 1 ; i++)
     dsigma[i] = dgama[i][0] + i * dgama[i-1][0];
   ff->dsigma = dsigma;
-  for (int i=0 ; i<2*nu; i++) free(dgama[i]);
+  for (int i=0 ; i<2*nu+2; i++) free(dgama[i]);
   free(dgama);
 
   {
@@ -282,10 +250,11 @@ void FF_build(FF *ff, int N, double edges[3][3]){
     double hL = fmax(ax/ff->topGridDim[0],
                 fmax(ay/ff->topGridDim[1],az/ff->topGridDim[2]));
     int L = ff->maxLevel ;
-    double kmax = 1.0/(hL* pow(nu * pow(2.0,L+nu+1./nu)*ff->tolRec,1./(nu-1.))) ;
-    ff->kLim[0] = (int)(kmax/asx);
-    ff->kLim[1] = (int)(kmax/asy);
-    ff->kLim[2] = (int)(kmax/asz);
+    ff->kmaxComputed  = 1.0/(hL* pow(nu * pow(2.0,L+nu+1./nu)*ff->tolRec,1./(nu-1.))) ;
+    if (ff->kmaxUserSpecified >= 0)
+      ff->kmax = ff->kmaxUserSpecified;
+    else
+      ff->kmax = ff->kmaxComputed;
   }
 
   // build anti-blurring operator
@@ -400,7 +369,6 @@ double FF_get_errEst(FF *ff, int N, double *charge){
 // The rebuild method is called every time the periodic cell changes.
 // It initializes edges and calculate the grid2grid stencils.
 // helper functions:
-static void dALp1(FF *ff, Triple gd, Triple sd, double kh[], double detA);
 static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA);
 static void kaphatA(FF *ff, int l, Triple gd, Triple sd, double kh[],
                     Vector as);
@@ -411,7 +379,7 @@ void FF_rebuild(FF *ff, double edges[3][3]) {
   Matrix A = *(Matrix *)ff->A;
   // calculate coeffs for const part of energy
   double *tau = ff->tau;
-  int nu = ff->orderAcc + 1;
+  int nu = ff->orderAcc;
   double a_0 = ff->aCut[0];
   int L = ff->maxLevel;
   double aL=ff->aCut[L];
@@ -535,8 +503,8 @@ static void omegap(FF *ff){
   for (int l = ff->maxLevel; l >= 1; l--){
     for (int alpha = 0; alpha < 3; alpha++){
       int Ma = M[alpha];
-      double *c = (double *)malloc((Ma/2 + 1)*sizeof(double));
-      for (int k = 0; k <= Ma/2; k++){
+      double *c = (double *)malloc(Ma*sizeof(double));
+      for (int k = 0; k < Ma; k++){
         c[k] = Phi[0];
         double theta = 2.*pi*(double)k/(double)Ma;
         for (int n = 1; n <= nu/2 - 1; n++)
@@ -563,42 +531,30 @@ static void omegap(FF *ff){
 static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   // add d^{L+1}(A) to kh
   Matrix Ai = *(Matrix *)ff-> Ai;
-  int nu = ff->orderAcc + 1;
+  int nu = ff->orderAcc;
   double *sigmad = ff->dsigma;
   int L = ff->maxLevel;
   double aL = ff->aCut[L];
   double pi = 4.*atan(1.);
-  double kmax = ff->kmax ;
-  // loop on vec k
-  // for kx = 0, 1, -1, ..., kLim.x, -kLim.x
-  int klimx, klimy, klimz;
-  if (ff->kLimUserSpecified >= 0)
-    klimx = klimy = klimz = ff->kLimUserSpecified ;
-  else
-    klimx = ff->kLim[0], klimy = ff->kLim[1], klimz = ff->kLim[2];
-  for (int kx = - klimx ; kx <= klimx; kx++){
-    int kx1 = (kx % gd.x + gd.x) % gd.x;
-    int kx0 = (kx1 + gd.x/2) % gd.x - gd.x/2;
-    double cLx = ff->cL[0][abs(kx0)];
-    for (int ky = - klimy; ky <= klimy; ky++){
-      int ky1 = (ky % gd.y + gd.y) % gd.y;
-      int ky0 = (ky1 + gd.y/2) % gd.y - gd.y/2;
-      double cLxy = cLx*ff->cL[1][abs(ky0)];
-      for (int kz = - klimz; kz <= klimz; kz++){
-        int kz1 = (kz % gd.z + gd.z) % gd.z;
-        int kz0 = (kz1 + gd.z/2) % gd.z - gd.z/2;
-        double cLxyz = cLxy*ff->cL[2][abs(kz0)];
+  double kmax = ff->kmax;
+  
+  for (int kx = 0; kx < gd.x; kx++){
+    double cLx = ff->cL[0][kx];
+    for (int ky = 0; ky < gd.y; ky++){
+      double cLxy = cLx*ff->cL[1][ky];
+      for (int kz = 0; kz < gd.z; kz++){
+        double cLxyz = cLxy*ff->cL[2][kz];
         double fkx = (double)kx, fky = (double)ky, fkz = (double)kz;
-        double Aikx = Ai.xx*fkx + Ai.yx*fky + Ai.zx*fkz;
-        double Aiky = Ai.xy*fkx + Ai.yy*fky + Ai.zy*fkz;
-        double Aikz = Ai.xz*fkx + Ai.yz*fky + Ai.zz*fkz;
-        
-        int pxmin = (- kmax - Aikx ) / (Ai.xx * gd.x);
-        int pxmax = (  kmax - Aikx ) / (Ai.xx * gd.x);
-        int pymin = (- kmax - Aiky ) / (Ai.yy * gd.y);
-        int pymax = (  kmax - Aiky ) / (Ai.yy * gd.y);
-        int pzmin = (- kmax - Aikz ) / (Ai.zz * gd.z);
-        int pzmax = (  kmax - Aikz ) / (Ai.zz * gd.z);
+        //double Aikx = Ai.xx*fkx + Ai.yx*fky + Ai.zx*fkz;
+        //double Aiky = Ai.xy*fkx + Ai.yy*fky + Ai.zy*fkz;
+        //double Aikz = Ai.xz*fkx + Ai.yz*fky + Ai.zz*fkz;
+        // TODO  has to be modified for parallelpipeds
+        int pxmin = (- kmax - Ai.xx * fkx ) / (Ai.xx * gd.x);
+        int pxmax = (  kmax - Ai.xx * fkx ) / (Ai.xx * gd.x);
+        int pymin = (- kmax - Ai.yy * fky ) / (Ai.yy * gd.y);
+        int pymax = (  kmax - Ai.yy * fky ) / (Ai.yy * gd.y);
+        int pzmin = (- kmax - Ai.zz * fkz ) / (Ai.zz * gd.z);
+        int pzmax = (  kmax - Ai.zz * fkz ) / (Ai.zz * gd.z);
         //double k2 = Aikx*Aikx + Aiky*Aiky + Aikz*Aikz;
         //double chi_cL = 0.0;
         
@@ -628,50 +584,13 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
           }
         }
         double chi_cL = chisum * cLxyz;
-        kh[(kx1*gd.y + ky1)*gd.z + kz1]
+        kh[(kx*gd.y + ky)*gd.z + kz]
         += chi_cL*gd.x*gd.y*gd.z;
       }
     }
   }
 }
 
-static void dALp1(FF *ff, Triple gd, Triple sd, double kh[], double detA){
-  // add d^{L+1}(A) to kh
-  Matrix Ai = *(Matrix *)ff-> Ai;
-  double pi = 4.*atan(1.);
-  double pidetA = pi*fabs(detA);
-  double pi2beta2 = pow(pi/ff->beta, 2);
-  // loop on vec k
-  // for kx = 0, 1, -1, ..., kLim.x, -kLim.x
-  int klimx, klimy, klimz;
-  if (ff->kLimUserSpecified >= 0)
-    klimx = klimy = klimz = ff->kLimUserSpecified ;
-  else
-    klimx = ff->kLim[0], klimy = ff->kLim[1], klimz = ff->kLim[2];
-  for (int kx = - klimx ; kx <= klimx; kx++){
-    int kx1 = (kx % gd.x + gd.x) % gd.x;
-    int kx0 = (kx1 + gd.x/2) % gd.x - gd.x/2;
-    double cLx = ff->cL[0][abs(kx0)];
-    for (int ky = - klimy; ky <= klimy; ky++){
-      int ky1 = (ky % gd.y + gd.y) % gd.y;
-      int ky0 = (ky1 + gd.y/2) % gd.y - gd.y/2;
-      double cLxy = cLx*ff->cL[1][abs(ky0)];
-      for (int kz = - klimz; kz <= klimz; kz++){
-        int kz1 = (kz % gd.z + gd.z) % gd.z;
-        int kz0 = (kz1 + gd.z/2) % gd.z - gd.z/2;
-        double cLxyz = cLxy*ff->cL[2][abs(kz0)];
-        double fkx = (double)kx, fky = (double)ky, fkz = (double)kz;
-        double Aikx = Ai.xx*fkx + Ai.yx*fky + Ai.zx*fkz,
-          Aiky = Ai.xy*fkx + Ai.yy*fky + Ai.zy*fkz,
-          Aikz = Ai.xz*fkx + Ai.yz*fky + Ai.zz*fkz;
-        double k2 = Aikx*Aikx + Aiky*Aiky + Aikz*Aikz;
-        double chi_cL = k2 == 0 ? 0 : exp(- pi2beta2*k2)/(pidetA*k2)*cLxyz;
-        kh[(kx1*gd.y + ky1)*gd.z + kz1]
-          += chi_cL*gd.x*gd.y*gd.z;
-      }
-    }
-  }
-}
 double *padding_z(FF *ff,int l,double *ql,Triple gd, Triple sd){
   msm4g_tic();
   int gdznew = gd.z + sd.z;
@@ -823,7 +742,7 @@ static double kappaA(FF *ff, int l, Vector s, Vector as){
   // kappa_l(A s; A)  ::: might separate l < L and l = L
   Matrix A = *(Matrix *)ff->A;
   double *tau = ff->tau;
-  int nu = ff->orderAcc + 1;
+  int nu = ff->orderAcc;
   double a_l = ff->aCut[l];
   double beta = ff->beta;
   double rootPi = sqrt(4.*atan(1.));

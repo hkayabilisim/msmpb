@@ -28,6 +28,8 @@ typedef struct FF {
   double tolDir;
   double tolRec;
   double kmax;
+  double kmaxUserSpecified;
+  double kmaxComputed;
   bool FFT;
   fftw_complex *fftw_in;
   fftw_plan forward, backward;

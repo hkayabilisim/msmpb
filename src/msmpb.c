@@ -44,7 +44,8 @@ int main(int argc, char **argv){
   double perturbz = 0.0;
   bool perturb = false;
   
-  int  L=-1, kmax = -1 ;
+  int  L=-1;
+  double kmax = -1 ;
   int replx = 1; int reply = 1; int replz = 1;
 
   for (int i = 0 ; i < argc ;i++) {
@@ -68,7 +69,7 @@ int main(int argc, char **argv){
       double tol_rec = atof(argv[i+1]);
       FF_set_tolRec(ff, tol_rec);
     } else if (strcmp(argv[i],"--kmax") == 0) {
-      kmax = atoi(argv[i+1]);
+      kmax = atof(argv[i+1]);
     } else if (strcmp(argv[i],"--perturb") == 0) {
       perturb = true;
     } else if (strcmp(argv[i],"--repl") == 0) {
@@ -89,7 +90,7 @@ int main(int argc, char **argv){
       
     }
   }
-  ff->kLimUserSpecified = kmax;
+  ff->kmaxUserSpecified = kmax;
 
   sprintf(inifile,"%s.ini",argv[1]);
   sprintf(accfile,"%s.acc",argv[1]);
@@ -234,13 +235,8 @@ int main(int argc, char **argv){
   printf("%-30s : %10.3e\n", "tol_rec",FF_get_tolRec(ff));
   printf("%-30s : %.16f\n", "beta",ff->beta);
   printf("%-30s : %.16f\n", "kmax",ff->kmax);
-  printf("%-30s : %3d\n","klimx",ff->kLim[0]);
-  printf("%-30s : %3d\n","klimy",ff->kLim[1]);
-  printf("%-30s : %3d\n","klimz",ff->kLim[2]);
-  printf("%-30s : %3d\n","kLimUserSpecified",ff->kLimUserSpecified);
-  printf("%-30s : %3d\n","effectiveklim_x",ff->kLimUserSpecified > -1 ? ff->kLimUserSpecified : ff->kLim[0]);
-  printf("%-30s : %3d\n","effectiveklim_y",ff->kLimUserSpecified > -1 ? ff->kLimUserSpecified : ff->kLim[1]);
-  printf("%-30s : %3d\n","effectiveklim_z",ff->kLimUserSpecified > -1 ? ff->kLimUserSpecified : ff->kLim[2]);
+  printf("%-30s : %.16f\n","kmaxUserSpecified",ff->kmaxUserSpecified);
+  printf("%-30s : %.16f\n","kmaxComputed",ff->kmaxComputed);
   printf("%-30s : %.16e\n", "utotal",energy);
   
   FILE *afile = fopen(accfile, "r");
