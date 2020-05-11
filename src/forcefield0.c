@@ -35,7 +35,6 @@ FF *FF_new(void){
 void FF_set_relCutoff(FF *ff, double relCutoff){
   ff->relCutoff = relCutoff;}
 // ::: YET TO DO: PARAMETER CHECKING :::
-// ::: e.g., the tolDir and tolRec
 void FF_set_orderAcc(FF *ff, int orderAcc ){
   // orderAcc: even integer >= 4
   ff->orderAcc = orderAcc;}
@@ -45,10 +44,6 @@ void FF_set_maxLevel(FF *ff, int maxLevel) {
   ff->maxLevel = maxLevel;}
 void FF_set_topGridDim(FF *ff, int topGridDim[3]){
   *(Triple *)ff->topGridDim = *(Triple *)topGridDim;}
-void FF_set_tolDir(FF *ff, double tolDir){
-  ff->tolDir = tolDir;}
-void FF_set_tolRec(FF *ff, double tolRec){
-  ff->tolRec = tolRec;}
 void FF_set_FFT(FF *ff, bool FFT){
 #ifdef NO_FFT
   if (FFT){
@@ -164,12 +159,6 @@ void FF_build(FF *ff, int N, double edges[3][3]){
   ff->aCut[ff->maxLevel] = aL;
   for (int l = ff->maxLevel-1; l >= 0; l--)
     ff->aCut[l] = 0.5*ff->aCut[l+1];
-  if (! ff->tolDir){
-    if (ff->tolRec) ff->tolDir = ff->tolRec;
-    else ff->tolDir = 0.1*pow(0.5*ff->relCutoff, -ff->orderAcc);}
-  if (! ff->tolRec) {
-      ff->tolRec = 0.01;
-  }
   
   // build tau(s) = tau_0 + tau_1*s + ... + tau_{ord-1} *s^{ord-1}
   ff->tau = (double *)malloc(ff->orderAcc*sizeof(double));
@@ -250,11 +239,6 @@ void FF_build(FF *ff, int N, double edges[3][3]){
     double hL = fmax(ax/ff->topGridDim[0],
                 fmax(ay/ff->topGridDim[1],az/ff->topGridDim[2]));
     int L = ff->maxLevel ;
-    ff->kmaxComputed  = 1.0/(hL* pow(nu * pow(2.0,L+nu+1./nu)*ff->tolRec,1./(nu-1.))) ;
-    if (ff->kmaxUserSpecified >= 0)
-      ff->kmax = ff->kmaxUserSpecified;
-    else
-      ff->kmax = ff->kmaxComputed;
   }
 
   // build anti-blurring operator
@@ -304,10 +288,6 @@ int FF_get_maxLevel(FF *ff) {
   return ff->maxLevel;}
 void FF_get_topGridDim(FF*ff, int topGridDim[3]) {
   *(Triple *)topGridDim = *(Triple *)ff->topGridDim;}
-double FF_get_tolDir(FF*ff) {
-  return ff->tolDir;}
-double FF_get_tolRec(FF*ff) {
-  return ff->tolRec;}
 bool FF_get_FFT(FF *ff){
         return ff->FFT;}
 double FF_get_cutoff(FF *ff) {
@@ -536,59 +516,46 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   int L = ff->maxLevel;
   double aL = ff->aCut[L];
   double pi = 4.*atan(1.);
-  double kmax = ff->kmax;
-  
-  for (int kx = 0; kx < gd.x; kx++){
-    double cLx = ff->cL[0][kx];
-    for (int ky = 0; ky < gd.y; ky++){
-      double cLxy = cLx*ff->cL[1][ky];
-      for (int kz = 0; kz < gd.z; kz++){
-        double cLxyz = cLxy*ff->cL[2][kz];
-        double fkx = (double)kx, fky = (double)ky, fkz = (double)kz;
-        //double Aikx = Ai.xx*fkx + Ai.yx*fky + Ai.zx*fkz;
-        //double Aiky = Ai.xy*fkx + Ai.yy*fky + Ai.zy*fkz;
-        //double Aikz = Ai.xz*fkx + Ai.yz*fky + Ai.zz*fkz;
-        // TODO  has to be modified for parallelpipeds
-        int pxmin = (- kmax - Ai.xx * fkx ) / (Ai.xx * gd.x);
-        int pxmax = (  kmax - Ai.xx * fkx ) / (Ai.xx * gd.x);
-        int pymin = (- kmax - Ai.yy * fky ) / (Ai.yy * gd.y);
-        int pymax = (  kmax - Ai.yy * fky ) / (Ai.yy * gd.y);
-        int pzmin = (- kmax - Ai.zz * fkz ) / (Ai.zz * gd.z);
-        int pzmax = (  kmax - Ai.zz * fkz ) / (Ai.zz * gd.z);
-        //double k2 = Aikx*Aikx + Aiky*Aiky + Aikz*Aikz;
-        //double chi_cL = 0.0;
-        
-        double chisum = 0;
-        for (int px = pxmin ; px <= pxmax ;px++) {
-          for (int py = pymin ; py <= pymax ;py++) {
-            for (int pz = pzmin ; pz <= pzmax ;pz++) {
-              double ax = Ai.xx * (fkx + gd.x * px) +
-                          Ai.yx * (fky + gd.y * py) +
-                          Ai.zx * (fkz + gd.z * pz);
-              double ay = Ai.xy * (fkx + gd.x * px) +
-                          Ai.yy * (fky + gd.y * py) +
-                          Ai.zy * (fkz + gd.z * pz);
-              double az = Ai.xz * (fkx + gd.x * px) +
-                          Ai.yz * (fky + gd.y * py) +
-                          Ai.zz * (fkz + gd.z * pz);
-              double k2 = ax * ax + ay * ay + az * az;
-              if (k2 != 0) {
-                double k = sqrt(k2);
-                // eq:chikA
-                for (int j = nu/2 ; j<=nu -1 ;j++)
-                  chisum += aL/(k*detA) * pow(-1,j) *
+    
+  double (*chi)[gd.y/2+1][gd.z/2+1] = malloc( sizeof(double[gd.x/2+1][gd.y/2+1][gd.z/2+1]) );
+
+  for (int kx = 0; kx < gd.x/2 + 1; kx++){
+    for (int ky = 0; ky < gd.y/2 + 1; ky++){
+      for (int kz = 0; kz < gd.z/2 + 1; kz++){ 
+        double ax = Ai.xx * kx + Ai.yx * ky + Ai.zx * kz;
+        double ay = Ai.xy * kx + Ai.yy * ky + Ai.zy * kz;
+        double az = Ai.xz * kx + Ai.yz * ky + Ai.zz * kz;
+        double k2 = ax * ax + ay * ay + az * az;
+        if (k2 != 0) {
+          double k = sqrt(k2);
+          double sum = 0;
+          for (int j = nu/2 ; j<=nu -1 ;j++) {
+            sum += aL/(k*detA) * pow(-1,j) *
                   (-cos(pi*k*aL) * sigmad[2*j]   / pow(pi*k*aL,2*j+1)
                    +sin(pi*k*aL) * sigmad[2*j+1] / pow(pi*k*aL,2*j+2));
-              }
-            }
           }
+          chi[kx][ky][kz] = sum;
         }
-        double chi_cL = chisum * cLxyz;
-        kh[(kx*gd.y + ky)*gd.z + kz]
-        += chi_cL*gd.x*gd.y*gd.z;
       }
     }
   }
+  
+  for (int kx = 0; kx < gd.x; kx++){
+    double cLx = ff->cL[0][kx];
+    int ckx = kx < (gd.x+1)/2 ? kx : gd.x - kx ; // kx < Mx/2
+    for (int ky = 0; ky < gd.y; ky++){
+      double cLxy = cLx*ff->cL[1][ky]; 
+      int cky = ky < (gd.y+1)/2.0 ? ky : gd.y - ky ; // ky < My/2
+      for (int kz = 0; kz < gd.z; kz++){
+        double cLxyz = cLxy*ff->cL[2][kz];
+        int ckz = kz < (gd.z+1)/2 ? kz : gd.z - kz ; // kz < Mz/2
+        
+        double chi_cL = chi[ckx][cky][ckz] * cLxyz;
+        kh[(kx*gd.y + ky)*gd.z + kz] += chi_cL*gd.x*gd.y*gd.z;
+      }
+    }
+  }
+  free(chi);
 }
 
 double *padding_z(FF *ff,int l,double *ql,Triple gd, Triple sd){

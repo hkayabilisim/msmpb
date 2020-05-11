@@ -25,11 +25,6 @@ typedef struct FF {
   int orderAcc;
   int maxLevel;
   int topGridDim[3];
-  double tolDir;
-  double tolRec;
-  double kmax;
-  double kmaxUserSpecified;
-  double kmaxComputed;
   bool FFT;
   fftw_complex *fftw_in;
   fftw_plan forward, backward;
@@ -44,8 +39,6 @@ typedef struct FF {
   double *(*omegap)[3];  // quasi-interpolation coefficients
   int nLim; // ceiling(relCutoff - 1)
   double *aCut; // abs cutoffs
-  int kLim[3]; // range of wavenumbers
-  int kLimUserSpecified;
   double *cL[3]; // c_x^2, c_y^2, c_z^2:
   // coeffs for interpolating reciprocal sum
   double **khat;  // grid2grid stencils
@@ -68,16 +61,12 @@ void FF_set_relCutoff(FF *ff, double rel_cutoff);
 void FF_set_orderAcc(FF *ff, int orderAcc);
 void FF_set_maxLevel(FF *ff, int maxLevel);
 void FF_set_topGridDim(FF *ff, int topGridDim[3]);
-void FF_set_tolDir(FF *ff, double tolDir);
-void FF_set_tolRec(FF *ff, double tolRec);
 void FF_set_FFT(FF *ff, bool FFT);
 void FF_build(FF *ff, int N, double edges[3][3]);
 double FF_get_relCutoff(FF *ff);
 int FF_get_orderAcc(FF *ff);
 int FF_get_maxLevel(FF *ff);
 void FF_get_topGridDim(FF *ff, int topGridDim[3]);
-double FF_get_tolDir(FF *ff);
-double FF_get_tolRec(FF *ff);
 bool FF_get_FFT(FF *ff);
 double FF_get_errEst(FF *ff, int N, double *charge);
 void FF_rebuild(FF *ff, double edges[3][3]);

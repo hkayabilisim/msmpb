@@ -13,9 +13,7 @@ void usage() {
           "[--a0 absolute_cutoff] "
           "[--nu accuracyOrder] "
           "[-M grid-spacing] \n"
-          "[--tol-dir direct_tolerance] "
-          "[--tol-rec reciprocal_tolerance] "
-          "[--kmax number_of_vawes]\n");
+          "[--tol-dir direct_tolerance]\n");
   exit(1);
 }
 
@@ -32,7 +30,6 @@ int main(int argc, char **argv){
   double acc[70000][3];
   double q[70000];
   char inifile[100],accfile[100],potfile[100] ;
-  int kmax = -1 ;
   for (int i = 0 ; i < argc ;i++) {
     if (strcmp(argv[i],"--a0") == 0) {
       double a0 = atof(argv[i+1]);
@@ -47,15 +44,8 @@ int main(int argc, char **argv){
     } else if (strcmp(argv[i],"--tol-dir") == 0) {
       double tol_dir = atof(argv[i+1]);
       FF_set_tolDir(ff, tol_dir);
-    } else if (strcmp(argv[i],"--tol-rec") == 0) {
-      double tol_rec = atof(argv[i+1]);
-      FF_set_tolRec(ff, tol_rec);
-    }  else if (strcmp(argv[i],"--kmax") == 0) {
-      kmax = atoi(argv[i+1]);
     }
   }
-  ff->kLimUserSpecified = kmax;
-  
   
   sprintf(inifile,"%s.ini",argv[1]);
   sprintf(accfile,"%s.acc",argv[1]);
@@ -107,18 +97,6 @@ int main(int argc, char **argv){
   printf("%-30s : %f\n", "cutoff",FF_get_cutoff(ff));
   printf("%-30s : %d\n", "nbar",0); // nbar not defined
   printf("%-30s : %10.3e\n", "tol_dir",FF_get_tolDir(ff));
-  printf("%-30s : %10.3e\n", "tol_rec",FF_get_tolRec(ff));
-  printf("%-30s : %.16f\n", "kmax",ff->kmax);
-  printf("%-30s : %3d\n","klimx",ff->kLim[0]);
-  printf("%-30s : %3d\n","klimy",ff->kLim[1]);
-  printf("%-30s : %3d\n","klimz",ff->kLim[2]);
-  printf("%-30s : %3d\n","kLimUserSpecified",ff->kLimUserSpecified);
-  printf("%-30s : %3d\n","effectiveklim_x",ff->kLimUserSpecified > -1 ?
-         ff->kLimUserSpecified : ff->kLim[0]);
-  printf("%-30s : %3d\n","effectiveklim_y",ff->kLimUserSpecified > -1 ?
-         ff->kLimUserSpecified : ff->kLim[1]);
-  printf("%-30s : %3d\n","effectiveklim_z",ff->kLimUserSpecified > -1 ?
-         ff->kLimUserSpecified : ff->kLim[2]);
   printf("%-30s : %.16e\n", "utotal",energy);
   
   FILE *afile = fopen(accfile, "r");

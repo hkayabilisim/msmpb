@@ -32,7 +32,7 @@ FF *FF_new(void){
 void FF_set_cutoff(FF *ff, double cutoff){
   ff->cutoff = cutoff;}
 // ::: YET TO DO: PARAMETER CHECKING :::
-// ::: e.g., the tolDir and tolRec
+// ::: e.g., the tolDir
 void FF_set_orderAcc(FF *ff, int orderAcc ){
   // orderAcc: even integer >= 4
   ff->orderAcc = orderAcc;}
@@ -40,8 +40,6 @@ void FF_set_topGridDim(FF *ff, int topGridDim[3]){
   *(Triple *)ff->topGridDim = *(Triple *)topGridDim;}
 void FF_set_tolDir(FF *ff, double tolDir){
   ff->tolDir = tolDir;}
-void FF_set_tolRec(FF *ff, double tolRec){
-  ff->tolRec = tolRec;}
 
 // helper functions:
 static double invert(Matrix *A);
@@ -57,10 +55,7 @@ void FF_build(FF *ff, int N, double edges[3][3]){
   if (! ff->cutoff) ff->cutoff = 8.;
   if (! ff->orderAcc) ff->orderAcc = 6;
   if (! ff->tolDir){
-    if (ff->tolRec) ff->tolDir = ff->tolRec;
-    else ff->tolDir = 1.e-5;}
-  if (! ff->tolRec)
-    ff->tolRec = ff->tolDir;
+    ff->tolDir = 1.e-5;}
   
 	// calculate beta
   // erfc(beta a_0)/a_0 = ff->tolDir/h_0  % EPBD05 omit 1/h_star
@@ -117,25 +112,6 @@ void FF_build(FF *ff, int N, double edges[3][3]){
     ff->topGridDim[0] = (int)ceil(ax/h);
     ff->topGridDim[1] = (int)ceil(ay/h);
     ff->topGridDim[2] = (int)ceil(az/h);}
-
-  // set kmax
-  const_ = sqrt(pi)*ff->tolRec/(2.*beta*hstar);
-  double kmax = 0.; // kmax = pi*kmax/beta until after iteration
-  res = erfc(kmax) - const_;
-  oldres = 2.*res;
-  while (fabs(res) < fabs(oldres)){  // Newton-Raphson
-    double dres = -2./sqrt(pi)*exp(-kmax*kmax);
-    kmax -= res/dres;
-    oldres = res;
-    res = erfc(kmax) - const_;}
-  kmax = beta*kmax/pi;
-  ff->kmax = kmax;
-  double asx = sqrt(Ai.xx*Ai.xx + Ai.xy*Ai.xy + Ai.xz*Ai.xz);
-  double asy = sqrt(Ai.yx*Ai.yx + Ai.yy*Ai.yy + Ai.yz*Ai.yz);
-  double asz = sqrt(Ai.zx*Ai.zx + Ai.zy*Ai.zy + Ai.zz*Ai.zz);
-  ff->kLim[0] = (int)(kmax/asx);
-  ff->kLim[1] = (int)(kmax/asy);
-  ff->kLim[2] = (int)(kmax/asz);
   
   // build first ord/2 pieces of B-splines Q_ord(t)
   // piece_i(t) = q_i0 + q_i1*(t - i) + ... + q_{i,ord-1}*(t - i)^{ord-1}
@@ -199,8 +175,6 @@ void FF_get_topGridDim(FF*ff, int topGridDim[3]) {
   *(Triple *)topGridDim = *(Triple *)ff->topGridDim;}
 double FF_get_tolDir(FF*ff) {
   return ff->tolDir;}
-double FF_get_tolRec(FF*ff) {
-  return ff->tolRec;}
 
 double FF_get_errEst(FF *ff, int N, double *charge){
   // calculate C_{nu-1}
@@ -341,22 +315,16 @@ static void dALp1(FF *ff, Triple gd, double kh[], double detA){
   double pi = 4.*atan(1.);
   double pidetA = pi*fabs(detA);
   double pi2beta2 = pow(pi/ff->beta, 2);
-  // loop on vec k
-  // for kx = 0, 1, -1, ..., kLim.x, -kLim.x
-  int klimx, klimy, klimz;
-  if (ff->kLimUserSpecified >= 0)
-    klimx = klimy = klimz = ff->kLimUserSpecified ;
-  else
-    klimx = ff->kLim[0], klimy = ff->kLim[1], klimz = ff->kLim[2];
-  for (int kx = - klimx ; kx <= klimx; kx++){
+
+  for (int kx = -gd.x/2; kx < (gd.x + 1)/2; kx++){
     int kx1 = (kx % gd.x + gd.x) % gd.x;
     int kx0 = (kx1 + gd.x/2) % gd.x - gd.x/2;
     double cLx = ff->cL[0][abs(kx0)];
-    for (int ky = - klimy; ky <= klimy; ky++){
+    for (int ky = -gd.y/2; ky < (gd.y + 1)/2; ky++){
       int ky1 = (ky % gd.y + gd.y) % gd.y;
       int ky0 = (ky1 + gd.y/2) % gd.y - gd.y/2;
       double cLxy = cLx*ff->cL[1][abs(ky0)];
-      for (int kz = - klimz; kz <= klimz; kz++){
+      for (int kz = - gd.z/2; kz < (gd.z + 1)/2; kz++){
         int kz1 = (kz % gd.z + gd.z) % gd.z;
         int kz0 = (kz1 + gd.z/2) % gd.z - gd.z/2;
         double cLxyz = cLxy*ff->cL[2][abs(kz0)];

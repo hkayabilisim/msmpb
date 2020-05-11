@@ -14,9 +14,6 @@ void usage() {
           "[--nu accuracyOrder] "
           "[-M grid-spacing] \n"
           "[-L numberOfLevels] "
-          "[--tol-dir direct_tolerance] "
-          "[--tol-rec reciprocal_tolerance] \n"
-          "[--kmax number_of_vawes]\n"
           "[--perturb]\n"
           "[--repl replx reply replz]\n"
           "[--edge a11 a12 a13 a21 a22 a23 a31 a32 a33]\n");
@@ -44,8 +41,7 @@ int main(int argc, char **argv){
   double perturbz = 0.0;
   bool perturb = false;
   
-  int  L=-1;
-  double kmax = -1 ;
+  int  L=1;
   int replx = 1; int reply = 1; int replz = 1;
 
   for (int i = 0 ; i < argc ;i++) {
@@ -62,14 +58,6 @@ int main(int argc, char **argv){
     } else if (strcmp(argv[i],"-L") == 0) {
       int L = atoi(argv[i+1]);
       FF_set_maxLevel(ff, L);
-    } else if (strcmp(argv[i],"--tol-dir") == 0) {
-      double tol_dir = atof(argv[i+1]);
-      FF_set_tolDir(ff, tol_dir);
-    } else if (strcmp(argv[i],"--tol-rec") == 0) {
-      double tol_rec = atof(argv[i+1]);
-      FF_set_tolRec(ff, tol_rec);
-    } else if (strcmp(argv[i],"--kmax") == 0) {
-      kmax = atof(argv[i+1]);
     } else if (strcmp(argv[i],"--perturb") == 0) {
       perturb = true;
     } else if (strcmp(argv[i],"--repl") == 0) {
@@ -90,7 +78,6 @@ int main(int argc, char **argv){
       
     }
   }
-  ff->kmaxUserSpecified = kmax;
 
   sprintf(inifile,"%s.ini",argv[1]);
   sprintf(accfile,"%s.acc",argv[1]);
@@ -231,12 +218,7 @@ int main(int argc, char **argv){
   printf("%-30s : %d\n", "TopLevelMx",M[0]);
   printf("%-30s : %d\n", "TopLevelMy",M[1]);
   printf("%-30s : %d\n", "TopLevelMz",M[2]);
-  printf("%-30s : %10.3e\n", "tol_dir",FF_get_tolDir(ff));
-  printf("%-30s : %10.3e\n", "tol_rec",FF_get_tolRec(ff));
   printf("%-30s : %.16f\n", "beta",ff->beta);
-  printf("%-30s : %.16f\n", "kmax",ff->kmax);
-  printf("%-30s : %.16f\n","kmaxUserSpecified",ff->kmaxUserSpecified);
-  printf("%-30s : %.16f\n","kmaxComputed",ff->kmaxComputed);
   printf("%-30s : %.16e\n", "utotal",energy);
   
   FILE *afile = fopen(accfile, "r");
