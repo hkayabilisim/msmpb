@@ -516,12 +516,24 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   int L = ff->maxLevel;
   double aL = ff->aCut[L];
   double pi = 4.*atan(1.);
-    
-  double (*chi)[gd.y/2+1][gd.z/2+1] = malloc( sizeof(double[gd.x/2+1][gd.y/2+1][gd.z/2+1]) );
-
-  for (int kx = 0; kx < gd.x/2 + 1; kx++){
-    for (int ky = 0; ky < gd.y/2 + 1; ky++){
-      for (int kz = 0; kz < gd.z/2 + 1; kz++){ 
+  int cx = 2 * ((gd.x+1)/2) + 1;
+  int cy = 2 * ((gd.y+1)/2) + 1;
+  int cz = (gd.z+1)/2 + 1;
+  double ***psi = (double ***)calloc(cx,sizeof(double **));
+  for (int i = 0 ; i < cx ;i++) {
+    psi[i] = (double **)calloc(cy,sizeof(double *));
+    for (int j = 0; j < cy ; j++)
+      psi[i][j] = (double *)calloc(cz,sizeof(double));
+  }
+  // To make negative indexing possible
+  for (int i = 0 ; i < cx ;i++)
+    psi[i] += (gd.y+1)/2;
+  psi += (gd.x+1)/2;
+  
+  psi[0][0][0] = 0.0;
+  for (int kx = -(gd.x+ 1)/2; kx <= (gd.x+1)/2; kx++){
+    for (int ky = -(gd.y+1)/2; ky <= (gd.y+1)/2; ky++){
+      for (int kz = 0; kz <= (gd.z+1)/2; kz++){
         double ax = Ai.xx * kx + Ai.yx * ky + Ai.zx * kz;
         double ay = Ai.xy * kx + Ai.yy * ky + Ai.zy * kz;
         double az = Ai.xz * kx + Ai.yz * ky + Ai.zz * kz;
@@ -534,7 +546,7 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
                   (-cos(pi*k*aL) * sigmad[2*j]   / pow(pi*k*aL,2*j+1)
                    +sin(pi*k*aL) * sigmad[2*j+1] / pow(pi*k*aL,2*j+2));
           }
-          chi[kx][ky][kz] = sum;
+          psi[kx][ky][kz] = sum;
         }
       }
     }
@@ -542,20 +554,33 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   
   for (int kx = 0; kx < gd.x; kx++){
     double cLx = ff->cL[0][kx];
-    int ckx = kx < (gd.x+1)/2 ? kx : gd.x - kx ; // kx < Mx/2
+    int ckx = kx < (gd.x+1)/2 ? kx : kx - gd.x  ; // kx < Mx/2
     for (int ky = 0; ky < gd.y; ky++){
       double cLxy = cLx*ff->cL[1][ky]; 
-      int cky = ky < (gd.y+1)/2.0 ? ky : gd.y - ky ; // ky < My/2
-      for (int kz = 0; kz < gd.z; kz++){
+      int cky = ky < (gd.y+1)/2.0 ? ky : ky - gd.y ; // ky < My/2
+      for (int kz = 0; kz < (gd.z+1)/2 ; kz++){
         double cLxyz = cLxy*ff->cL[2][kz];
-        int ckz = kz < (gd.z+1)/2 ? kz : gd.z - kz ; // kz < Mz/2
-        
-        double chi_cL = chi[ckx][cky][ckz] * cLxyz;
+        double chi_cL = psi[ckx][cky][kz] * cLxyz;
+        kh[(kx*gd.y + ky)*gd.z + kz] += chi_cL*gd.x*gd.y*gd.z;
+      }
+      for (int kz = (gd.z+1)/2 ; kz < gd.z; kz++){
+        double cLxyz = cLxy*ff->cL[2][kz];
+        double chi_cL = psi[-ckx][-cky][gd.z-kz] * cLxyz;
         kh[(kx*gd.y + ky)*gd.z + kz] += chi_cL*gd.x*gd.y*gd.z;
       }
     }
   }
-  free(chi);
+  // Back to original offset
+  psi -= (gd.x+1)/2;
+  for (int i = 0 ; i < cx ;i++)
+    psi[i] -= (gd.y+1)/2;
+  for (int i=0;i<cx;i++) {
+    for (int j = 0 ; j<cy;j++) {
+      free(psi[i][j]);
+    }
+    free(psi[i]);
+  }
+  free(psi);
 }
 
 double *padding_z(FF *ff,int l,double *ql,Triple gd, Triple sd){
