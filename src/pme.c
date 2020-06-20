@@ -111,6 +111,7 @@ int main(int argc, char **argv){
     
     double max_acc = 0.;
     double max_acc_err = 0.;
+    double ferror = 0.0;
     for (int i = 0; i < N; i++){
       double acci
       = sqrt(acc[i][0]*acc[i][0] + acc[i][1]*acc[i][1] +	acc[i][2]*acc[i][2]);
@@ -118,9 +119,13 @@ int main(int argc, char **argv){
       double errx = acc[i][0] + F[i][0]/q[i],
       erry	= acc[i][1] + F[i][1]/q[i],
       errz	= acc[i][2] + F[i][2]/q[i];
-      double err = sqrt(errx*errx + erry*erry + errz*errz);
+      double err2 = errx*errx + erry*erry + errz*errz;
+      double err = sqrt(err2);
       max_acc_err = fmax(max_acc_err, err);
+      ferror += err2 * q[i]*q[i];
     }
+    ferror = sqrt(ferror/(double)N);
+    printf("%-30s : %25.16e\n", "ferror",ferror);
     printf("%-30s : %25.16e\n", "forceerror",max_acc_err/max_acc);
     fclose(afile);
   }

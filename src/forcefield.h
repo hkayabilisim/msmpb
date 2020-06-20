@@ -17,11 +17,13 @@ extern struct O o;
 // it is recommended that these values be set with the FF_set methods
 typedef struct FF {
   int N;
+  double *q;
   double A[3][3], Ai[3][3];  // A inverse transpose
   double detA;
   double relCutoff;
   double errEst;
   double errEstMoore;
+  double estErr; // tol default 1e-3
   int orderAcc;
   int maxLevel;
   int topGridDim[3];
@@ -39,6 +41,7 @@ typedef struct FF {
   double *(*omegap)[3];  // quasi-interpolation coefficients
   int nLim; // ceiling(relCutoff - 1)
   double *aCut; // abs cutoffs
+  double cutoff;
   double *cL[3]; // c_x^2, c_y^2, c_z^2:
   // coeffs for interpolating reciprocal sum
   double **khat;  // grid2grid stencils
@@ -53,25 +56,25 @@ typedef struct FF {
   double time_restriction[10];
   double time_prolongation[10];
   double time_padding[10];
-
 } FF;
-FF *FF_new(void);
+FF *FF_new(int N, double *q, double edges[3][3]);
 double FF_get_cutoff(FF *ff);
-void FF_set_relCutoff(FF *ff, double rel_cutoff);
+void FF_set_cutoff(FF *ff, double cutoff);
 void FF_set_orderAcc(FF *ff, int orderAcc);
 void FF_set_maxLevel(FF *ff, int maxLevel);
 void FF_set_topGridDim(FF *ff, int topGridDim[3]);
 void FF_set_FFT(FF *ff, bool FFT);
-void FF_build(FF *ff, int N, double edges[3][3]);
-double FF_get_relCutoff(FF *ff);
+void FF_build(FF *ff);
 int FF_get_orderAcc(FF *ff);
 int FF_get_maxLevel(FF *ff);
 void FF_get_topGridDim(FF *ff, int topGridDim[3]);
 bool FF_get_FFT(FF *ff);
-double FF_get_errEst(FF *ff, int N, double *charge);
+double FF_get_errEst(FF *ff);
+double FF_get_estErr(FF *ff);
+void FF_set_estErr(FF *ff,double estErr);
 void FF_rebuild(FF *ff, double edges[3][3]);
 double FF_energy(FF *ff, int N, double (*force)[3], double (*position)[3],
-                 double *charge, double *weight);
+                double *weight);
   // if weights == NULL, unit weights are assumed; otherwise
   // weights should point to an array of length FF_get_maxLevel(ff) + 1
 void FF_delete(FF *ff);

@@ -10,7 +10,7 @@ struct O o = {"csCl"}; // struct for optional output
 
 void usage() {
   fprintf(stderr,"Usage: msm dataFile "
-          "[--nbar relativeCutoff] "
+          "[--a0 cutoff] "
           "[--nu accuracyOrder] "
           "[-M grid-spacing] \n"
           "[-L numberOfLevels] "
@@ -25,7 +25,6 @@ int main(int argc, char **argv){
   }
  
   
-  FF *ff = FF_new();
   int M[3] = {0, 0, 0};
   double energy;
   double edge[3][3], edge_in[3][3];
@@ -41,23 +40,19 @@ int main(int argc, char **argv){
   double perturbz = 0.0;
   bool perturb = false;
   
-  int  L=1;
   int replx = 1; int reply = 1; int replz = 1;
-
+  double a0 = -1;
+  int nu = -1,L=-1,Mtop=-1;
   for (int i = 0 ; i < argc ;i++) {
-    if (strcmp(argv[i],"--nbar") == 0) {
-      double nbar = atof(argv[i+1]);
-      FF_set_relCutoff(ff, nbar);
+    if (strcmp(argv[i],"--a0") == 0) {
+      a0 = atof(argv[i+1]);
     } else if (strcmp(argv[i],"--nu") == 0) {
-      int nu = atoi(argv[i+1]);
-      FF_set_orderAcc(ff, nu);
+      nu = atoi(argv[i+1]);
     } else if (strcmp(argv[i],"-M") == 0) {
-      int Mtop = atoi(argv[i+1]);
+      Mtop = atoi(argv[i+1]);
       M[0] = Mtop; M[1] = Mtop; M[2] = Mtop;
-      FF_set_topGridDim(ff, M);
     } else if (strcmp(argv[i],"-L") == 0) {
-      int L = atoi(argv[i+1]);
-      FF_set_maxLevel(ff, L);
+      L = atoi(argv[i+1]);
     } else if (strcmp(argv[i],"--perturb") == 0) {
       perturb = true;
     } else if (strcmp(argv[i],"--repl") == 0) {
@@ -75,7 +70,6 @@ int main(int argc, char **argv){
       edge_in[2][1] = atof(argv[i+8]);
       edge_in[2][2] = atof(argv[i+9]);
       edge_given = true;
-      
     }
   }
 
@@ -149,9 +143,14 @@ int main(int argc, char **argv){
   }
   
   o.e = (double *)malloc((L+1)*sizeof(double));
- 
+  FF *ff = FF_new(Nrep,q,edge);
+  if (L > 0) FF_set_maxLevel(ff, L);
+  if (Mtop > 0) FF_set_topGridDim(ff, M);
+  if (nu > 0) FF_set_orderAcc(ff, nu);
+  if (a0 > 0) FF_set_cutoff(ff,a0);
+
   msm4g_tic();
-  FF_build(ff, Nrep, edge);
+  FF_build(ff);
   double time_build = msm4g_toc();
   
   msm4g_tic();
@@ -206,7 +205,6 @@ int main(int argc, char **argv){
   printf("%-30s : %-10.5f\n","Perturbationx",perturbx);
   printf("%-30s : %-10.5f\n","Perturbationy",perturby);
   printf("%-30s : %-10.5f\n","Perturbationz",perturbz);
-  printf("%-30s : %f\n", "nbar",FF_get_relCutoff(ff));
   printf("%-30s : %d\n", "nu",FF_get_orderAcc(ff));
   printf("%-30s : %f\n", "cutoff",FF_get_cutoff(ff));
   printf("%-30s : %5.2f %5.2f %5.2f\n", "Edge row1",

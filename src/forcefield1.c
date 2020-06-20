@@ -57,9 +57,10 @@ double msm4g_toc() {
 }
 
 double FF_energy(FF *ff, int N, double (*force)[3], double (*position)[3],
-                 double *charge, double *weight) {
+                double *weight) {
   // N may change in case of grand canonical simulations
   double *tau = ff->tau;
+  double *charge = ff->q;
   int nu = ff->orderAcc;
     Vector *r = (Vector *)position;
   Vector *F = (Vector *)force;
@@ -161,7 +162,7 @@ double FF_energy(FF *ff, int N, double (*force)[3], double (*position)[3],
     F[i].y += charge[i]*E[i].y;
     F[i].z += charge[i]*E[i].z;}
   free(E);
-  ff->errEst = FF_get_errEst(ff, N, charge);
+  ff->errEst = FF_get_errEst(ff);
   return energy;
 }
 

@@ -21,19 +21,30 @@ typedef struct Vector {double x, y, z;} Vector;
 typedef struct Matrix {double xx, xy, xz, yx, yy, yz, zx, zy, zz;} Matrix;
 typedef struct Triple {int x, y, z;} Triple;
 
-FF *FF_new(void){
+double _FF_get_errEst(FF *ff,int nu);
+FF *FF_new(int N, double *q, double edges[3][3]){
   FF *ff = (FF *)calloc(1, sizeof(FF));
 #ifndef NO_FFT
   ff->FFT = true;
 #endif
+  ff->N = N;
+  ff->q = q;
+  for (int i = 0 ; i < 3; i++)
+    for (int j = 0 ; j < 3; j++)
+      ff->A[i][j] = edges[i][j];
+  ff->maxLevel = -1;
+  ff->orderAcc = -1;
+  ff->topGridDim[0] = -1;
+  ff->topGridDim[1] = -1;
+  ff->topGridDim[2] = -1;
+  ff->cutoff = -1;
+  ff->estErr = -1;
   return ff;}
 
 // for each computational parameter
 // have a get method FF_set_... that returns the parameter
 // Each set method is optional
 // No method parameter should be changed after a call to build
-void FF_set_relCutoff(FF *ff, double relCutoff){
-  ff->relCutoff = relCutoff;}
 // ::: YET TO DO: PARAMETER CHECKING :::
 void FF_set_orderAcc(FF *ff, int orderAcc ){
   // orderAcc: even integer >= 4
@@ -44,6 +55,19 @@ void FF_set_maxLevel(FF *ff, int maxLevel) {
   ff->maxLevel = maxLevel;}
 void FF_set_topGridDim(FF *ff, int topGridDim[3]){
   *(Triple *)ff->topGridDim = *(Triple *)topGridDim;}
+
+void FF_set_estErr(FF *ff,double estErr){
+  ff->estErr = estErr;
+}
+double FF_get_estErr(FF *ff){
+  return ff->estErr;
+}
+void FF_set_cutoff(FF *ff,double cutoff) {
+  ff->cutoff = cutoff;
+}
+double FF_get_cutoff(FF *ff) {
+  return ff->cutoff;
+}
 void FF_set_FFT(FF *ff, bool FFT){
 #ifdef NO_FFT
   if (FFT){
@@ -82,84 +106,122 @@ static int increment(int Minput){
     }
   } while (1);
 }
-void FF_build(FF *ff, int N, double edges[3][3]){
+
+void determineM(FF *ff,int L,int *Mout) {
+  Matrix A = *(Matrix *)ff->A;
+  int N = ff->N;
+  double eta = 1.0;
+  if (ff->FFT) {
+    if (L >=2)
+      eta = 0.83;
+    else
+      eta = 5.7 ;
+  }
+
+  double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
+  double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
+  double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
+  
+  double Msx = pow(2.,1.-L)*pow(eta*N,1./3.)*ax*pow(ax*ay*az,-1./3.);
+  double Msy = pow(2.,1.-L)*pow(eta*N,1./3.)*ay*pow(ax*ay*az,-1./3.);
+  double Msz = pow(2.,1.-L)*pow(eta*N,1./3.)*az*pow(ax*ay*az,-1./3.);
+  
+  Mout[0] = ceil(Msx);
+  Mout[1] = ceil(Msy);
+  Mout[2] = ceil(Msz);
+}
+
+void FF_build(FF *ff){
   // N: number of particles
   // edges: columns are vectors defining parallelpiped
-  ff->N = N;
-  Matrix Ai = *(Matrix *)edges;
-  double detA = invert(&Ai);
+  int N = ff->N;
+  for (int i = 0 ; i < 3; i++)
+    for (int j = 0 ; j < 3; j++)
+      ff->Ai[i][j] = ff->A[i][j];
+  Matrix A = *(Matrix *)ff->A;
+  Matrix Ai = *(Matrix *)ff->Ai;
 
-  // set default values for unspecified method parameters
-  if (! ff->relCutoff) ff->relCutoff = 8.;
-  if (! ff->orderAcc){
-    if (ff->relCutoff <= 7.6) ff->orderAcc = 4;
-    else if (ff->relCutoff <= 10.8) ff->orderAcc = 6;
-    else ff->orderAcc = 8;}
-  if (ff->relCutoff < ff->orderAcc/2){
-    ff->relCutoff = ff->orderAcc/2;
-    printf("relative cutoff too small; reset to %f\n",ff->relCutoff);}
-  ff->nLim = ceil(ff->relCutoff - 1.);
+  ff->detA = invert(&Ai);
+  
+  // Default error tolerance
+  if (ff->estErr == -1) ff->estErr = 0.001;
+  
+  // Set L=1 if not specified
+  if (ff->maxLevel == -1) ff->maxLevel = 1;
+  
+  if (! ff->FFT &&  ff->topGridDim[0] == -1) {
+    int l = 1 ;
+    int Mest[3];
+    do {
+      determineM(ff,l,&Mest[0]);
+      int Mprod = Mest[0]*Mest[1]*Mest[2];
+      if (Mprod <= sqrt(N))  break;
+      l++;
+    } while (true);
+    if (ff->maxLevel != l)
+      fprintf(stderr,"L=%d is replaced by L=%d\n",ff->maxLevel,l);
+    ff->maxLevel = l;
+    ff->topGridDim[0] = Mest[0];
+    ff->topGridDim[1] = Mest[1];
+    ff->topGridDim[2] = Mest[2];
+  }
+  
+  // determine a0 if not specified
+  if (ff->cutoff == -1) {
+    if (ff->orderAcc == -1) { // order not selected
+      double min_cutoff = INFINITY;
+      for (int nu_test = 4 ; nu_test <= 10; nu_test += 2) {
+        double top = _FF_get_errEst(ff,nu_test);
+        double cutoff_test = pow(top/ff->estErr,1./nu_test);
+        if (cutoff_test < min_cutoff)
+          min_cutoff = cutoff_test;
+      }
+      ff->cutoff = min_cutoff;
+    } else {
+      double top = _FF_get_errEst(ff,ff->orderAcc);
+      ff->cutoff = pow(top/ff->estErr,1./ff->orderAcc);
+    }
+  }
+  
+  // determine nu
+  if (ff->orderAcc == -1) {
+    double min_err = INFINITY;
+    int best_nu = 4;
+    for (int nu_test = 4 ; nu_test <= 10; nu_test += 2) {
+      double err = _FF_get_errEst(ff,nu_test)/pow(ff->cutoff,nu_test);
+      if (err < min_err) {
+        min_err = err;
+        best_nu = nu_test;
+      }
+    }
+    ff->orderAcc = best_nu;
+  }
+  
+  if (ff->topGridDim[0] == -1) {
+    determineM(ff,ff->maxLevel,ff->topGridDim);
+  }
+
+  if (ff->FFT) {
+    ff->topGridDim[0] = increment(ff->topGridDim[0]);
+    ff->topGridDim[1] = increment(ff->topGridDim[1]);
+    ff->topGridDim[2] = increment(ff->topGridDim[2]);
+  }
+
+  ff->aCut = (double *)malloc((ff->maxLevel + 1)*sizeof(double));
+  ff->aCut[0] = ff->cutoff;
+  for (int l = 1; l <= ff->maxLevel; l++)
+    ff->aCut[l] = 2.0*ff->aCut[l-1];
+  
+  // calculate relative cutoff
   double asx = sqrt(Ai.xx*Ai.xx + Ai.xy*Ai.xy + Ai.xz*Ai.xz);
   double asy = sqrt(Ai.yx*Ai.yx + Ai.yy*Ai.yy + Ai.yz*Ai.yz);
   double asz = sqrt(Ai.zx*Ai.zx + Ai.zy*Ai.zy + Ai.zz*Ai.zz);
-  double asprod = asx * asy * asz;
-  // if M is not given
-  if (! ff->topGridDim[0]) {
-    // if L is  given
-    if ( ff->maxLevel ) {
-      double Ms = pow(8., (1. - ff->maxLevel))*(double)N;
-      double Msx = pow(Ms * asprod,1./3.)/asx ;
-      double Msy = pow(Ms * asprod,1./3.)/asy ;
-      double Msz = pow(Ms * asprod,1./3.)/asz ;
-      ff->topGridDim[0] = (int)ceil(Msx);
-      ff->topGridDim[1] = (int)ceil(Msy);
-      ff->topGridDim[2] = (int)ceil(Msz);
-      // TODO: For the program FFTW, the dimensions should contain only
-      // 2, 3, 5, and 7 as factors.
-    } else {
-      // L is not given
-      int nbar = ff->relCutoff;
-      int L = 1;
-      bool searchForM = true;
-      do {
-        double Ms = pow(8., (1. - L))*(double)N;
-        double Msx = pow(Ms * asprod,1./3.)/asx ;
-        double Msy = pow(Ms * asprod,1./3.)/asy ;
-        double Msz = pow(Ms * asprod,1./3.)/asz ;
-        int Mx = (int)ceil(Msx);
-        int My = (int)ceil(Msy);
-        int Mz = (int)ceil(Msz);
-        int prodM = Mx * My * Mz ;
-        if (prodM <= sqrt(N) ||
-            (floor(Mx/2.0) <= nbar &&
-             floor(My/2.0) <= nbar &&
-             floor(Mz/2.0) <= nbar)) {
-              ff->topGridDim[0] = Mx;
-              ff->topGridDim[1] = My;
-              ff->topGridDim[2] = Mz;
-              searchForM = false;
-            } else {
-          L++;
-            }
-      } while (searchForM);
-      ff->maxLevel = L;
-    }
-  }
-  // Increment Mx,My,Mz so that they are product of small primes
-  ff->topGridDim[0] = increment(ff->topGridDim[0]);
-  ff->topGridDim[1] = increment(ff->topGridDim[1]);
-  ff->topGridDim[2] = increment(ff->topGridDim[2]);
+  int nbarx = ceil(ff->aCut[ff->maxLevel] * ff->topGridDim[0] * asx);
+  int nbary = ceil(ff->aCut[ff->maxLevel] * ff->topGridDim[1] * asy);
+  int nbarz = ceil(ff->aCut[ff->maxLevel] * ff->topGridDim[2] * asz);
+  ff->relCutoff = fmax(fmax(nbarx,nbary),nbarz);
+  ff->nLim = ceil(ff->relCutoff - 1.);
 
-  double aL = ff->relCutoff/fmax(ff->topGridDim[0]*asx,
-              fmax(ff->topGridDim[1]*asy,ff->topGridDim[2]*asz));
-  if (! ff->maxLevel){
-    int M = ff->topGridDim[0]*ff->topGridDim[1]*ff->topGridDim[2];
-    ff->maxLevel = N < 8*M ? 1 : 1 + ilogb(N/M)/3;}
-  ff->aCut = (double *)malloc((ff->maxLevel + 1)*sizeof(double));
-  ff->aCut[ff->maxLevel] = aL;
-  for (int l = ff->maxLevel-1; l >= 0; l--)
-    ff->aCut[l] = 0.5*ff->aCut[l+1];
-  
   // build tau(s) = tau_0 + tau_1*s + ... + tau_{ord-1} *s^{ord-1}
   ff->tau = (double *)malloc(ff->orderAcc*sizeof(double));
   ff->tau[0] = 1.;
@@ -231,16 +293,6 @@ void FF_build(FF *ff, int N, double edges[3][3]){
   for (int i=0 ; i<2*nu+2; i++) free(dgama[i]);
   free(dgama);
 
-  {
-    Matrix A =  *(Matrix *)edges;
-    double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
-    double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
-    double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
-    double hL = fmax(ax/ff->topGridDim[0],
-                fmax(ay/ff->topGridDim[1],az/ff->topGridDim[2]));
-    int L = ff->maxLevel ;
-  }
-
   // build anti-blurring operator
   omegap(ff);
   
@@ -275,13 +327,11 @@ void FF_build(FF *ff, int N, double edges[3][3]){
   
  
   
-  FF_rebuild(ff, edges);
+  FF_rebuild(ff,ff->A);
 }
 
 // for each computational parameter
 // also have a get method FF_set_... that returns the parameter
-double FF_get_relCutoff(FF*ff) {
-  return ff->relCutoff;}
 int FF_get_orderAcc(FF*ff) {
   return ff->orderAcc;}
 int FF_get_maxLevel(FF *ff) {
@@ -290,59 +340,51 @@ void FF_get_topGridDim(FF*ff, int topGridDim[3]) {
   *(Triple *)topGridDim = *(Triple *)ff->topGridDim;}
 bool FF_get_FFT(FF *ff){
         return ff->FFT;}
-double FF_get_cutoff(FF *ff) {
-  return ff->aCut[0];}
 
-double FF_get_errEst(FF *ff, int N, double *charge){
-  // calculate C_{nu-1}
-  int nu = ff->orderAcc;
-  int L = ff->maxLevel;
-  if (nu > 10){
-    printf("No error estimate available for order %d.\n", nu);
-    return nan("");}
-  int index = (nu - 4)/2;
-  double Zm[4] = {81.,9675.,1986705.,651100275.};
-  double Zp[4] = {24.,720.,40320.,3628800.};
-  double theta[4] = {1.0,1.0,1.0,1.0};
- 
-  // calculate hmin
-  Matrix Ai = *(Matrix *)ff->Ai;
-  Matrix A = *(Matrix *)ff->A;
-  double detA = ff->detA;
-  double asx = sqrt(Ai.xx*Ai.xx + Ai.xy*Ai.xy + Ai.xz*Ai.xz);
-  double asy = sqrt(Ai.yx*Ai.yx + Ai.yy*Ai.yy + Ai.yz*Ai.yz);
-  double asz = sqrt(Ai.zx*Ai.zx + Ai.zy*Ai.zy + Ai.zz*Ai.zz);
-  double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
-  double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
-  double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
-  double a0 = ff->aCut[0];
-  Triple M1 = *(Triple *)ff->topGridDim;
-  for (int i = 1; i < L; i++) {
-    M1.x *= 2;
-    M1.y *= 2;
-    M1.z *= 2;
-  }
-  double eta0 = 0.0;//fmax(fmax(asx,asy),asz) * a0 ;
-  Vector h
-    = {ax/(double)M1.x, ay/(double)M1.y, az/(double)M1.z};
-  double E3D = (4./3.)
-    * (asx*ax*pow(h.x/2.,nu-1)+asy*ay*pow(h.y/2.,nu-1)+asz*az*pow(h.z/2.,nu-1))
-    * (1./pow(a0,nu+1))
-    * (pow(1. + 3.*pow(2,(L-1.)/3.)*eta0,3) * Zm[index]
-       + 28. * pow(2,L+1.)*pow(eta0,3)*Zp[index]);
-  // complete the calculation
-  double Q2 = 0;
-  for (int i = 0; i < N; i++) Q2 += charge[i]*charge[i];  
-  // Moore's constant
-  double M[4] = {9., 825., 130095., 34096545.};
-  double cbarp[4] = {1./6., 1./30., 1./140., 1./630.};
-  double k[4] = {0.39189561, 0.150829428, 0.049632967, 0.013520855};
-  double C = 4./3.*M[index]*cbarp[index]*k[index];
-  double hmin = fmin(fmin(h.x, h.y), h.z);
-  ff->errEstMoore = Q2*C*pow(hmin, nu-2)/(pow(detA, 1./3.)*sqrt((double)N)*pow(a0, nu-1));
+double _FF_get_errEst(FF *ff,int nu) {
+   // calculate C_{nu-1}
+   int N = ff->N;
+   double *charge = ff->q;
+   int L = ff->maxLevel;
+   double pi = 4.*atan(1.);
+
+   if (nu > 10){
+     fprintf(stderr,"No error estimate available for order %d.\n", nu);
+     return nan("");}
+   int index = (nu - 4)/2;
+   double theta[4] = {1.0,1.0,1.0,1.0};
   
-  ff->errEst = Q2*a0*theta[index]*E3D/(pow(detA, 1./3.)*sqrt(3.0*N));
-  return ff->errEst;
+   Matrix Ai = *(Matrix *)ff->Ai;
+   Matrix A = *(Matrix *)ff->A;
+   double asx = sqrt(Ai.xx*Ai.xx + Ai.xy*Ai.xy + Ai.xz*Ai.xz);
+   double asy = sqrt(Ai.yx*Ai.yx + Ai.yy*Ai.yy + Ai.yz*Ai.yz);
+   double asz = sqrt(Ai.zx*Ai.zx + Ai.zy*Ai.zy + Ai.zz*Ai.zz);
+   double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
+   double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
+   double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
+   Triple M1 = *(Triple *)ff->topGridDim;
+   for (int i = 1; i < L; i++) {
+     M1.x *= 2;
+     M1.y *= 2;
+     M1.z *= 2;
+   }
+   Vector h = {ax/(double)M1.x, ay/(double)M1.y, az/(double)M1.z};
+   // complete the calculation
+   double Q2 = 0;
+   for (int i = 0; i < N; i++)
+     Q2 += charge[i]*charge[i];
+   double sigma[4] = {-630.,-155925.0,-56756700.0,-29462808375.};
+   double C = 16./3.*(1.0+pow(2.,-nu))*(pow(2.,1./(nu-1.))*(nu-1.)+5.*pow(2.,2./(nu-1.)))
+              *fabs(sigma[index])/((nu-2.)*pow(pi,nu-1.));
+   double sum = asx*ax*pow(h.x,nu-2.) + asy*ay*pow(h.y,nu-2.) + asz*az*pow(h.z,nu-2.) ;
+   double top = theta[index] * Q2 * C * (1.-pow(4.,-L)) * sum /
+                (sqrt(N));
+   return top;
+}
+double FF_get_errEst(FF *ff){
+  int nu = ff->orderAcc;
+  double a0 = ff->aCut[0];
+  return _FF_get_errEst(ff,nu)/pow(a0,nu);
 }
 
 
@@ -516,12 +558,24 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   int L = ff->maxLevel;
   double aL = ff->aCut[L];
   double pi = 4.*atan(1.);
-    
-  double (*chi)[gd.y/2+1][gd.z/2+1] = malloc( sizeof(double[gd.x/2+1][gd.y/2+1][gd.z/2+1]) );
-
-  for (int kx = 0; kx < gd.x/2 + 1; kx++){
-    for (int ky = 0; ky < gd.y/2 + 1; ky++){
-      for (int kz = 0; kz < gd.z/2 + 1; kz++){ 
+  int cx = 2 * ((gd.x+1)/2) + 1;
+  int cy = 2 * ((gd.y+1)/2) + 1;
+  int cz = (gd.z+1)/2 + 1;
+  double ***psi = (double ***)calloc(cx,sizeof(double **));
+  for (int i = 0 ; i < cx ;i++) {
+    psi[i] = (double **)calloc(cy,sizeof(double *));
+    for (int j = 0; j < cy ; j++)
+      psi[i][j] = (double *)calloc(cz,sizeof(double));
+  }
+  // To make negative indexing possible
+  for (int i = 0 ; i < cx ;i++)
+    psi[i] += (gd.y+1)/2;
+  psi += (gd.x+1)/2;
+  
+  psi[0][0][0] = 0.0;
+  for (int kx = -(gd.x+ 1)/2; kx <= (gd.x+1)/2; kx++){
+    for (int ky = -(gd.y+1)/2; ky <= (gd.y+1)/2; ky++){
+      for (int kz = 0; kz <= (gd.z+1)/2; kz++){
         double ax = Ai.xx * kx + Ai.yx * ky + Ai.zx * kz;
         double ay = Ai.xy * kx + Ai.yy * ky + Ai.zy * kz;
         double az = Ai.xz * kx + Ai.yz * ky + Ai.zz * kz;
@@ -534,7 +588,7 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
                   (-cos(pi*k*aL) * sigmad[2*j]   / pow(pi*k*aL,2*j+1)
                    +sin(pi*k*aL) * sigmad[2*j+1] / pow(pi*k*aL,2*j+2));
           }
-          chi[kx][ky][kz] = sum;
+          psi[kx][ky][kz] = sum;
         }
       }
     }
@@ -542,20 +596,33 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   
   for (int kx = 0; kx < gd.x; kx++){
     double cLx = ff->cL[0][kx];
-    int ckx = kx < (gd.x+1)/2 ? kx : gd.x - kx ; // kx < Mx/2
+    int ckx = kx < (gd.x+1)/2 ? kx : kx - gd.x  ; // kx < Mx/2
     for (int ky = 0; ky < gd.y; ky++){
       double cLxy = cLx*ff->cL[1][ky]; 
-      int cky = ky < (gd.y+1)/2.0 ? ky : gd.y - ky ; // ky < My/2
-      for (int kz = 0; kz < gd.z; kz++){
+      int cky = ky < (gd.y+1)/2.0 ? ky : ky - gd.y ; // ky < My/2
+      for (int kz = 0; kz < (gd.z+1)/2 ; kz++){
         double cLxyz = cLxy*ff->cL[2][kz];
-        int ckz = kz < (gd.z+1)/2 ? kz : gd.z - kz ; // kz < Mz/2
-        
-        double chi_cL = chi[ckx][cky][ckz] * cLxyz;
+        double chi_cL = psi[ckx][cky][kz] * cLxyz;
+        kh[(kx*gd.y + ky)*gd.z + kz] += chi_cL*gd.x*gd.y*gd.z;
+      }
+      for (int kz = (gd.z+1)/2 ; kz < gd.z; kz++){
+        double cLxyz = cLxy*ff->cL[2][kz];
+        double chi_cL = psi[-ckx][-cky][gd.z-kz] * cLxyz;
         kh[(kx*gd.y + ky)*gd.z + kz] += chi_cL*gd.x*gd.y*gd.z;
       }
     }
   }
-  free(chi);
+  // Back to original offset
+  psi -= (gd.x+1)/2;
+  for (int i = 0 ; i < cx ;i++)
+    psi[i] -= (gd.y+1)/2;
+  for (int i=0;i<cx;i++) {
+    for (int j = 0 ; j<cy;j++) {
+      free(psi[i][j]);
+    }
+    free(psi[i]);
+  }
+  free(psi);
 }
 
 double *padding_z(FF *ff,int l,double *ql,Triple gd, Triple sd){
