@@ -50,6 +50,7 @@ void FF_build(FF *ff, int N, double edges[3][3]){
   ff->N = N;
   Matrix Ai = *(Matrix *)edges;
   double detA = invert(&Ai);
+  ff->detA = detA;
 
   // set default values for unspecified method parameters
   if (! ff->cutoff) ff->cutoff = 8.;
@@ -218,6 +219,7 @@ void FF_rebuild(FF *ff, double edges[3][3]) {
   double pi = 4.*atan(1.);
   Matrix Ai = *(Matrix *)edges;
   double detA = invert(&Ai);
+  ff->detA = detA;
   *(Matrix *)ff->Ai = Ai;
   Vector as = {sqrt(Ai.xx*Ai.xx + Ai.yx*Ai.yx + Ai.zx*Ai.zx),
                sqrt(Ai.xy*Ai.xy + Ai.yy*Ai.yy + Ai.zy*Ai.zy),

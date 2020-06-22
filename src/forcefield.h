@@ -73,8 +73,7 @@ double FF_get_errEst(FF *ff);
 double FF_get_estErr(FF *ff);
 void FF_set_estErr(FF *ff,double estErr);
 void FF_rebuild(FF *ff, double edges[3][3]);
-double FF_energy(FF *ff, int N, double (*force)[3], double (*position)[3],
-                double *weight);
+double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weight);
   // if weights == NULL, unit weights are assumed; otherwise
   // weights should point to an array of length FF_get_maxLevel(ff) + 1
 void FF_delete(FF *ff);

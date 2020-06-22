@@ -109,6 +109,17 @@ int main(int argc, char **argv){
     for (int i = 0 ; i < N ; i++) {
       fgets(line, sizeof line, afile); sscanf(line, "%lf", &(acc[i][2])); }
     
+    // Converting acceleration into force
+    for (int i = 0 ; i < N ; i++) {
+      acc[i][0] *= -q[i];
+      acc[i][1] *= -q[i];
+      acc[i][2] *= -q[i];
+    }
+
+    double Q2 = 0.0;
+    for (int i = 0; i < N; i++) Q2 += q[i]*q[i];
+    double Fref = (Q2/(double)N)/pow(ff->detA/(double)N, 2./3.);
+
     double max_acc = 0.;
     double max_acc_err = 0.;
     double ferror = 0.0;
@@ -116,15 +127,16 @@ int main(int argc, char **argv){
       double acci
       = sqrt(acc[i][0]*acc[i][0] + acc[i][1]*acc[i][1] +	acc[i][2]*acc[i][2]);
       max_acc = fmax(max_acc, acci);
-      double errx = acc[i][0] + F[i][0]/q[i],
-      erry	= acc[i][1] + F[i][1]/q[i],
-      errz	= acc[i][2] + F[i][2]/q[i];
+      double errx = acc[i][0] - F[i][0],
+      erry	= acc[i][1] - F[i][1],
+      errz	= acc[i][2] - F[i][2];
       double err2 = errx*errx + erry*erry + errz*errz;
       double err = sqrt(err2);
       max_acc_err = fmax(max_acc_err, err);
-      ferror += err2 * q[i]*q[i];
+      ferror += err2 ;
     }
-    ferror = sqrt(ferror/(double)N);
+    ferror = sqrt(ferror/(double)N)/Fref;
+    printf("%-30s : %25.16f\n", "detA",ff->detA);
     printf("%-30s : %25.16e\n", "ferror",ferror);
     printf("%-30s : %25.16e\n", "forceerror",max_acc_err/max_acc);
     fclose(afile);

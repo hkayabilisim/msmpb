@@ -154,7 +154,7 @@ int main(int argc, char **argv){
   double time_build = msm4g_toc();
   
   msm4g_tic();
-  energy = FF_energy(ff, Nrep, F, r, q, NULL);
+  energy = FF_energy(ff, F, r, NULL);
   double time_energy = msm4g_toc();
   FF_get_topGridDim(ff,M);
   
@@ -229,7 +229,16 @@ int main(int argc, char **argv){
     for (int i = 0 ; i < N ; i++) {
       fgets(line, sizeof line, afile); sscanf(line, "%lf", &(acc[i][2])); }
     fclose(afile);
-
+    
+    // Converting acceleration into force
+    for (int i = 0 ; i < N ; i++) {
+      acc[i][0] *= -q[i];
+      acc[i][1] *= -q[i];
+      acc[i][2] *= -q[i];
+    }
+    double Q2 = 0.0;
+    for (int i = 0; i < N; i++) Q2 += q[i]*q[i];
+    double Fref = (Q2/(double)N)/pow(ff->detA/(double)N, 2./3.);
     double max_acc = 0.;
     double max_acc_err = 0.;
     double rms_top = 0.0;
@@ -244,11 +253,11 @@ int main(int argc, char **argv){
             double acci2 = acc[n][0]*acc[n][0] + acc[n][1]*acc[n][1] + acc[n][2]*acc[n][2];
             double acci = sqrt(acci2);
             max_acc = fmax(max_acc, acci);
-            double errx = acc[n][0] + F[m][0]/q[m],
-            erry = acc[n][1] + F[m][1]/q[m],
-            errz = acc[n][2] + F[m][2]/q[m];
+            double errx = acc[n][0] - F[m][0];
+            double erry = acc[n][1] - F[m][1];
+            double errz = acc[n][2] - F[m][2];
             double err2 = errx*errx + erry*erry + errz*errz;
-            ferror += err2 * q[m]*q[m];
+            ferror += err2 ;
             double err = sqrt(err2);
             max_acc_err = fmax(max_acc_err, err);
             rms_top += err2/mass[m];
@@ -258,7 +267,7 @@ int main(int argc, char **argv){
         }
       }
     }
-    ferror = sqrt(ferror/(double)N);
+    ferror = sqrt(ferror/(double)N)/Fref;
     double rms = sqrt(rms_top/rms_bottom);
     printf("%-30s : %25.16e\n", "ferror",ferror);
     printf("%-30s : %25.16e\n", "ferrorest",ff->errEst);
@@ -276,6 +285,7 @@ int main(int argc, char **argv){
     sscanf(line,"%lf", &energy_expected);
     energy_expected *= replx * reply * replz;
     printf("%-30s : %25.16e\n", "poterror",fabs(energy_expected-energy)/fabs(energy_expected));
+    printf("%-30s : %25.16f\n", "potabserror",energy-energy_expected);
     fclose(pfile);
   }
   

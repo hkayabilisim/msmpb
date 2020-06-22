@@ -56,12 +56,12 @@ double msm4g_toc() {
   return msm4g_tictocmanager(0);
 }
 
-double FF_energy(FF *ff, int N, double (*force)[3], double (*position)[3],
-                double *weight) {
+double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weight) {
   // N may change in case of grand canonical simulations
   double *tau = ff->tau;
   double *charge = ff->q;
   int nu = ff->orderAcc;
+  int N = ff->N;
     Vector *r = (Vector *)position;
   Vector *F = (Vector *)force;
   double *wt = (double *)malloc((ff->maxLevel + 1)*sizeof(double));

@@ -166,6 +166,10 @@ void FF_build(FF *ff){
     ff->topGridDim[2] = Mest[2];
   }
   
+  if (ff->FFT && ff->topGridDim[0] == -1) {
+    determineM(ff,ff->maxLevel,ff->topGridDim);
+  }
+  
   // determine a0 if not specified
   if (ff->cutoff == -1) {
     if (ff->orderAcc == -1) { // order not selected
@@ -197,9 +201,7 @@ void FF_build(FF *ff){
     ff->orderAcc = best_nu;
   }
   
-  if (ff->topGridDim[0] == -1) {
-    determineM(ff,ff->maxLevel,ff->topGridDim);
-  }
+
 
   if (ff->FFT) {
     ff->topGridDim[0] = increment(ff->topGridDim[0]);
