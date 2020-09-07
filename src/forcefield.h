@@ -23,6 +23,8 @@ typedef struct FF {
   double relCutoff;
   double errEst;
   double errEstMoore;
+  int ntc ;
+  int tmax ;
   double estErr; // tol default 1e-3
   int orderAcc;
   int maxLevel;
@@ -77,6 +79,7 @@ double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weig
   // if weights == NULL, unit weights are assumed; otherwise
   // weights should point to an array of length FF_get_maxLevel(ff) + 1
 void FF_delete(FF *ff);
+double FF_get_deltaF(FF *ff);
 
 double msm4g_tictocmanager(int push) ;
 void msm4g_tic(void);

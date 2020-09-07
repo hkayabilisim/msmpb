@@ -142,6 +142,7 @@ void FF_build(FF *ff){
   Matrix Ai = *(Matrix *)ff->Ai;
 
   ff->detA = invert(&Ai);
+  *(Matrix *)ff->Ai = Ai;
   
   // Default error tolerance
   if (ff->estErr == -1) ff->estErr = 0.001;
@@ -170,20 +171,26 @@ void FF_build(FF *ff){
     determineM(ff,ff->maxLevel,ff->topGridDim);
   }
   
+  if (ff->FFT) {
+    ff->topGridDim[0] = increment(ff->topGridDim[0]);
+    ff->topGridDim[1] = increment(ff->topGridDim[1]);
+    ff->topGridDim[2] = increment(ff->topGridDim[2]);
+  }
+  
   // determine a0 if not specified
   if (ff->cutoff == -1) {
     if (ff->orderAcc == -1) { // order not selected
       double min_cutoff = INFINITY;
       for (int nu_test = 4 ; nu_test <= 10; nu_test += 2) {
         double top = _FF_get_errEst(ff,nu_test);
-        double cutoff_test = pow(top/ff->estErr,1./nu_test);
+        double cutoff_test = pow(top/ff->estErr,1./(nu_test));
         if (cutoff_test < min_cutoff)
           min_cutoff = cutoff_test;
       }
       ff->cutoff = min_cutoff;
     } else {
       double top = _FF_get_errEst(ff,ff->orderAcc);
-      ff->cutoff = pow(top/ff->estErr,1./ff->orderAcc);
+      ff->cutoff = pow(top/ff->estErr,1./(ff->orderAcc));
     }
   }
   
@@ -192,7 +199,7 @@ void FF_build(FF *ff){
     double min_err = INFINITY;
     int best_nu = 4;
     for (int nu_test = 4 ; nu_test <= 10; nu_test += 2) {
-      double err = _FF_get_errEst(ff,nu_test)/pow(ff->cutoff,nu_test);
+      double err = _FF_get_errEst(ff,nu_test)/pow(ff->cutoff,nu_test-1.0);
       if (err < min_err) {
         min_err = err;
         best_nu = nu_test;
@@ -203,11 +210,7 @@ void FF_build(FF *ff){
   
 
 
-  if (ff->FFT) {
-    ff->topGridDim[0] = increment(ff->topGridDim[0]);
-    ff->topGridDim[1] = increment(ff->topGridDim[1]);
-    ff->topGridDim[2] = increment(ff->topGridDim[2]);
-  }
+
 
   ff->aCut = (double *)malloc((ff->maxLevel + 1)*sizeof(double));
   ff->aCut[0] = ff->cutoff;
@@ -343,45 +346,68 @@ void FF_get_topGridDim(FF*ff, int topGridDim[3]) {
 bool FF_get_FFT(FF *ff){
         return ff->FFT;}
 
-double _FF_get_errEst(FF *ff,int nu) {
-   // calculate C_{nu-1}
-   int N = ff->N;
-   double *charge = ff->q;
-   int L = ff->maxLevel;
-   double pi = 4.*atan(1.);
+double FF_get_deltaF(FF *ff) {
+  // calculate C_{nu-1}
+  int N = ff->N;
+  double *charge = ff->q;
+  int L = ff->maxLevel;
+  int nu = ff->orderAcc;
+  double a0 = ff->aCut[0];
 
-   if (nu > 10){
-     fprintf(stderr,"No error estimate available for order %d.\n", nu);
-     return nan("");}
-   int index = (nu - 4)/2;
-   double theta[4] = {1.0,1.0,1.0,1.0};
+  int index = (nu - 4)/2;
+  //double C[4] = {0.21,1.24,17.59,452.94};
+  double C[4] = {1,1,1,1};
   
-   Matrix Ai = *(Matrix *)ff->Ai;
-   Matrix A = *(Matrix *)ff->A;
-   double asx = sqrt(Ai.xx*Ai.xx + Ai.xy*Ai.xy + Ai.xz*Ai.xz);
-   double asy = sqrt(Ai.yx*Ai.yx + Ai.yy*Ai.yy + Ai.yz*Ai.yz);
-   double asz = sqrt(Ai.zx*Ai.zx + Ai.zy*Ai.zy + Ai.zz*Ai.zz);
-   double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
-   double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
-   double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
-   Triple M1 = *(Triple *)ff->topGridDim;
-   for (int i = 1; i < L; i++) {
-     M1.x *= 2;
-     M1.y *= 2;
-     M1.z *= 2;
-   }
-   Vector h = {ax/(double)M1.x, ay/(double)M1.y, az/(double)M1.z};
-   // complete the calculation
-   double Q2 = 0;
-   for (int i = 0; i < N; i++)
-     Q2 += charge[i]*charge[i];
-   double sigma[4] = {-630.,-155925.0,-56756700.0,-29462808375.};
-   double C = 16./3.*(1.0+pow(2.,-nu))*(pow(2.,1./(nu-1.))*(nu-1.)+5.*pow(2.,2./(nu-1.)))
-              *fabs(sigma[index])/((nu-2.)*pow(pi,nu-1.));
-   double sum = asx*ax*pow(h.x,nu-2.) + asy*ay*pow(h.y,nu-2.) + asz*az*pow(h.z,nu-2.) ;
-   double top = theta[index] * Q2 * C * (1.-pow(4.,-L)) * sum /
-                (sqrt(N));
-   return top;
+  Matrix A = *(Matrix *)ff->A;
+  double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
+  double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
+  double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
+  Triple M1 = *(Triple *)ff->topGridDim;
+  for (int i = 1; i < L; i++) {
+    M1.x *= 2;
+    M1.y *= 2;
+    M1.z *= 2;
+  }
+  // complete the calculation
+  double Q2 = 0;
+  for (int i = 0; i < N; i++)
+    Q2 += charge[i]*charge[i];
+  
+  double h1 = fmax(fmax(ax/M1.x,ay/M1.y),az/M1.z);
+  double deltaF = C[index]*Q2*(1-pow(4.0,-L))*pow(h1,nu-1)*pow(ff->detA,-1./3.)*pow(N,-0.5)
+     /pow(a0,nu+1);
+  return deltaF;
+}
+
+double _FF_get_errEst(FF *ff,int nu) {
+  // calculate C_{nu-1}
+  int N = ff->N;
+  double *charge = ff->q;
+  int L = ff->maxLevel;
+
+  int index = (nu - 4)/2;
+  //double C[4] = {0.21,1.24,17.59,452.94};
+  double C[4] = {1,1,1,1};
+  
+  Matrix A = *(Matrix *)ff->A;
+  double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
+  double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
+  double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
+  Triple M1 = *(Triple *)ff->topGridDim;
+  for (int i = 1; i < L; i++) {
+    M1.x *= 2;
+    M1.y *= 2;
+    M1.z *= 2;
+  }
+  // complete the calculation
+  double Q2 = 0;
+  for (int i = 0; i < N; i++)
+    Q2 += charge[i]*charge[i];
+  double Fref = (Q2/(double)N)/pow(ff->detA/(double)N, 2./3.);
+
+  double h1 = fmax(fmax(ax/M1.x,ay/M1.y),az/M1.z);
+  double deltaF = C[index]*Q2*(1-pow(4.0,-L))*pow(h1,nu-1)*pow(ff->detA,-1./3.)*pow(N,-0.5);
+  return deltaF/Fref;
 }
 double FF_get_errEst(FF *ff){
   int nu = ff->orderAcc;
@@ -573,6 +599,17 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   for (int i = 0 ; i < cx ;i++)
     psi[i] += (gd.y+1)/2;
   psi += (gd.x+1)/2;
+  double twonum1fac = 1.0;
+  for (int i = 1 ; i <= 2*nu - 1 ; i += 2)
+    twonum1fac  *= i;
+  
+  // Taylor coefficients
+  double tc[4][7] = {
+    {105.0,-1890.0,83160.0,-6486480.0,778377600.0,-132324192000.0,30169915776000.0},
+    {10395.0,-270270.0, 16216200.0  ,-1654052400.0,251415964800.0,-52797352608000.0,14572069319808000.0},
+  {2027025.0,-68918850.0,5237832600.0,-659966907600.0,121433910998400.0,-30358477749600000.0,9836146790870400000.0},
+    {654729075.0,-27498621150.0,2529873145800.0,-379480971870000.0,81967889923920000.0,-23770688077936800000.0,8842695964992489600000.0}
+  };
   
   psi[0][0][0] = 0.0;
   for (int kx = -(gd.x+ 1)/2; kx <= (gd.x+1)/2; kx++){
@@ -584,13 +621,56 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
         double k2 = ax * ax + ay * ay + az * az;
         if (k2 != 0) {
           double k = sqrt(k2);
-          double sum = 0;
+          double t = pi*k*aL;
+          double t2 = t*t;
+          double t4 = t2*t2;
+          double t6 = t4*t2;
+          double t8 = t6*t2;
+          double cosfac = 0.0, sinfac = 0.0;
+          //double taylor = 0;
+          // TODO: remove unnecessary calculations with if-else
+          if (nu == 4) {
+            sinfac = 15.0 - 6.0 * t2 ;
+            cosfac = 15.0 - 1.0 * t2 ;
+            //taylor = 1.0/105.0 - t2/1890.0 + t4/83160.0;
+          } else if (nu == 6) {
+            sinfac = 945.0 - 420.0 * t2 + 15.0 * t4 ;
+            cosfac = 945.0 - 105.0 * t2 +  1.0 * t4 ;
+            //taylor = 1.0/10395.0 - t2/270270.0 + t4/16216200.0  - t6/1654052400.0  ;
+          } else if (nu == 8) {
+            sinfac = 135135.0 - 62370.0 * t2 + 3150.0 * t4 - 28.0 * t6 ;
+            cosfac = 135135.0 - 17325.0 * t2 +  378.0 * t4 -  1.0 * t6 ;
+            //taylor = 1.0/2027025.0 - t2/68918850.0 + t4/5237832600.0 - t6/659966907600.0 + t8/121433910998400.0 ;
+          } else if (nu == 10) {
+            sinfac = 34459425.0 - 16216200.0 * t2 + 945945.0 * t4 - 13860.0 * t6 + 45.0 * t8 ;
+            cosfac = 34459425.0 -  4729725.0 * t2 + 135135.0 * t4 -   990.0 * t6 +  1.0 * t8 ;
+            //taylor = 1.0/654729075.0 - t2/27498621150.0 + t4/2529873145800.0 - t6/379480971870000.0 + t8/81967889923920000.0 - t10/23770688077936800000.0 ;
+          }
+          
+          
+          double sinvalue = sin(t)/t;
+          double cosvalue = cos(t);
+          if (t <= ff->tmax*pi/4.0) {
+            double taylor = 0.0;
+            double tpower = 1.0;
+            for (int i = 0 ; i < ff->ntc ; i++) {
+              taylor += tpower/tc[nu/2-2][i];
+              tpower *= t2;
+            }
+            psi[kx][ky][kz] = taylor/t2;
+          } else {
+            psi[kx][ky][kz]  = (sinfac * sinvalue - cosfac * cosvalue) ;
+            psi[kx][ky][kz]  = psi[kx][ky][kz] / pow(t,2.0*nu);
+          }
+          psi[kx][ky][kz] = psi[kx][ky][kz] * (twonum1fac*pi*aL*aL/detA) ;
+          
+          /*double sum = 0;
           for (int j = nu/2 ; j<=nu -1 ;j++) {
             sum += aL/(k*detA) * pow(-1,j) *
                   (-cos(pi*k*aL) * sigmad[2*j]   / pow(pi*k*aL,2*j+1)
                    +sin(pi*k*aL) * sigmad[2*j+1] / pow(pi*k*aL,2*j+2));
           }
-          psi[kx][ky][kz] = sum;
+          psi[kx][ky][kz] = sum; */
         }
       }
     }

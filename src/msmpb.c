@@ -16,6 +16,8 @@ void usage() {
           "[-L numberOfLevels] "
           "[--perturb]\n"
           "[--repl replx reply replz]\n"
+          "[--ntc numberOfTaylorTerms]\n"
+          "[--tmax tmax]\n"
           "[--edge a11 a12 a13 a21 a22 a23 a31 a32 a33]\n");
   exit(1);
 }
@@ -38,6 +40,8 @@ int main(int argc, char **argv){
   double perturbx = 0.0;
   double perturby = 0.0;
   double perturbz = 0.0;
+  int ntc = 7;
+  int tmax = 4;
   bool perturb = false;
   
   int replx = 1; int reply = 1; int replz = 1;
@@ -59,6 +63,10 @@ int main(int argc, char **argv){
       replx = atoi(argv[i+1]);
       reply = atoi(argv[i+2]);
       replz = atoi(argv[i+3]);
+    } else if (strcmp(argv[i],"--tmax") == 0) {
+        tmax = atoi(argv[i+1]);
+    } else if (strcmp(argv[i],"--ntc") == 0) {
+        ntc = atoi(argv[i+1]);
     } else if (strcmp(argv[i],"--edge") == 0) {
       edge_in[0][0] = atof(argv[i+1]);
       edge_in[0][1] = atof(argv[i+2]);
@@ -148,7 +156,8 @@ int main(int argc, char **argv){
   if (Mtop > 0) FF_set_topGridDim(ff, M);
   if (nu > 0) FF_set_orderAcc(ff, nu);
   if (a0 > 0) FF_set_cutoff(ff,a0);
-
+  ff->ntc = ntc;
+  ff->tmax = tmax;
   msm4g_tic();
   FF_build(ff);
   double time_build = msm4g_toc();
@@ -206,6 +215,8 @@ int main(int argc, char **argv){
   printf("%-30s : %-10.5f\n","Perturbationy",perturby);
   printf("%-30s : %-10.5f\n","Perturbationz",perturbz);
   printf("%-30s : %d\n", "nu",FF_get_orderAcc(ff));
+  printf("%-30s : %d\n", "ntc",ff->ntc);
+  printf("%-30s : %d\n", "tmax",ff->tmax);
   printf("%-30s : %f\n", "cutoff",FF_get_cutoff(ff));
   printf("%-30s : %5.2f %5.2f %5.2f\n", "Edge row1",
            edge[0][0],edge[0][1],edge[0][2]);
@@ -267,10 +278,10 @@ int main(int argc, char **argv){
         }
       }
     }
-    ferror = sqrt(ferror/(double)N)/Fref;
+    ferror = sqrt(ferror/(double)N);
     double rms = sqrt(rms_top/rms_bottom);
-    printf("%-30s : %25.16e\n", "ferror",ferror);
-    printf("%-30s : %25.16e\n", "ferrorest",ff->errEst);
+    printf("%-30s : %25.16e\n", "ferror",ferror/Fref);
+    printf("%-30s : %25.16e\n", "ferrorest",FF_get_errEst(ff));
     printf("%-30s : %25.16e\n", "ferrorestMoore",ff->errEstMoore);
     printf("%-30s : %25.16e\n", "forceerror",max_acc_err/max_acc);
     printf("%-30s : %25.16e\n", "forcermserror",rms);
