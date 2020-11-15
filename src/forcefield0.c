@@ -199,7 +199,7 @@ void FF_build(FF *ff){
     double min_err = INFINITY;
     int best_nu = 4;
     for (int nu_test = 4 ; nu_test <= 10; nu_test += 2) {
-      double err = _FF_get_errEst(ff,nu_test)/pow(ff->cutoff,nu_test-1.0);
+      double err = _FF_get_errEst(ff,nu_test)/pow(ff->cutoff,nu_test);
       if (err < min_err) {
         min_err = err;
         best_nu = nu_test;
@@ -374,15 +374,14 @@ double FF_get_deltaF(FF *ff) {
     Q2 += charge[i]*charge[i];
   
   double h1 = fmax(fmax(ax/M1.x,ay/M1.y),az/M1.z);
-  double deltaF = C[index]*Q2*(1-pow(4.0,-L))*pow(h1,nu-1)*pow(ff->detA,-1./3.)*pow(N,-0.5)
-     /pow(a0,nu+1);
+  double deltaF = C[index]*Q2*(1-pow(4.0,-L))*pow(h1,nu-1)*pow(ff->detA,-1./3.)*pow(N,-2.0/3.0)/pow(a0,nu);
   return deltaF;
 }
 
 double _FF_get_errEst(FF *ff,int nu) {
   // calculate C_{nu-1}
   int N = ff->N;
-  double *charge = ff->q;
+ double *charge = ff->q;
   int L = ff->maxLevel;
 
   int index = (nu - 4)/2;
@@ -403,10 +402,10 @@ double _FF_get_errEst(FF *ff,int nu) {
   double Q2 = 0;
   for (int i = 0; i < N; i++)
     Q2 += charge[i]*charge[i];
-  double Fref = (Q2/(double)N)/pow(ff->detA/(double)N, 2./3.);
+  double Fref = (Q2/(double)N)/pow(ff->detA/(double)N, 5./6.);
 
   double h1 = fmax(fmax(ax/M1.x,ay/M1.y),az/M1.z);
-  double deltaF = C[index]*Q2*(1-pow(4.0,-L))*pow(h1,nu-1)*pow(ff->detA,-1./3.)*pow(N,-0.5);
+  double deltaF = C[index]*Q2*(1-pow(4.0,-L))*pow(h1,nu-1)*pow(ff->detA,-1./3.)*pow(N,-2.0/3.0);
   return deltaF/Fref;
 }
 double FF_get_errEst(FF *ff){
@@ -731,6 +730,7 @@ double *padding_z(FF *ff,int l,double *ql,Triple gd, Triple sd){
 void grid2grid(FF* restrict ff,const int l,const Triple gd, double* restrict el, const double* restrict ql,
                const Triple sd, const double* restrict kh){
   double* restrict qlnew = padding_z(ff,l,ql,gd,sd);
+  //printf("Grid: %2d %2d %2d Stencil: %2d %2d %2d\n",gd.x,gd.y,gd.z,sd.x,sd.y,sd.z); 
   msm4g_tic();
   int gdznew = gd.z + sd.z ;
   for (int mx = 0; mx < gd.x; mx++) {

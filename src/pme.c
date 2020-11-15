@@ -77,27 +77,27 @@ int main(int argc, char **argv){
   double time_energy = msm4g_toc();
   FF_get_topGridDim(ff,M);
   
-  printf("%-30s : %10.8f\n","time_direct",ff->time_partcl2partcl);
-  printf("%-30s : %10.8f\n","time_build",time_build);
-  printf("%-30s : %10.8f\n","time_energy",time_energy);
-  printf("%-30s : %10.8f\n","time_total",time_build+time_energy);
-  printf("%-30s : %s\n", "data",argv[1]);
-  printf("%-30s : %d\n", "nu",FF_get_orderAcc(ff));
-  printf("%-30s : %f\n", "beta",ff->beta);
-  printf("%-30s : %d\n", "TopLevelMx",M[0]);
-  printf("%-30s : %d\n", "TopLevelMy",M[0]);
-  printf("%-30s : %d\n", "TopLevelMz",M[1]);
-  printf("%-30s : %d\n", "NumberOfLevels",1);
-  printf("%-30s : %5.2f %5.2f %5.2f\n", "Edge row1",
+  printf("{\"%s\" : %10.8f,\n","time_direct",ff->time_partcl2partcl);
+  printf("\"%s\" : %10.8f,\n","time_build",time_build);
+  printf("\"%s\" : %10.8f,\n","time_energy",time_energy);
+  printf("\"%s\" : %10.8f,\n","time_total",time_build+time_energy);
+  printf("\"%s\" : \"%s\",\n", "data",argv[1]);
+  printf("\"%s\" : %d,\n", "nu",FF_get_orderAcc(ff));
+  printf("\"%s\" : %f,\n", "beta",ff->beta);
+  printf("\"%s\" : %d,\n", "TopLevelMx",M[0]);
+  printf("\"%s\" : %d,\n", "TopLevelMy",M[0]);
+  printf("\"%s\" : %d,\n", "TopLevelMz",M[1]);
+  printf("\"%s\" : %d,\n", "NumberOfLevels",1);
+  printf("\"%s\" : [%5.2f, %5.2f, %5.2f],\n", "Edge row1",
          edge[0][0],edge[0][1],edge[0][2]);
-  printf("%-30s : %5.2f %5.2f %5.2f\n", "Edge row2",
+  printf("\"%s\" : [%5.2f, %5.2f, %5.2f],\n", "Edge row2",
          edge[1][0],edge[1][1],edge[1][2]);
-  printf("%-30s : %5.2f %5.2f %5.2f\n", "Edge row3",
+  printf("\"%s\" : [%5.2f, %5.2f, %5.2f],\n", "Edge row3",
          edge[2][0],edge[2][1],edge[2][2]);
-  printf("%-30s : %f\n", "cutoff",FF_get_cutoff(ff));
-  printf("%-30s : %d\n", "nbar",0); // nbar not defined
-  printf("%-30s : %10.3e\n", "tol_dir",FF_get_tolDir(ff));
-  printf("%-30s : %.16e\n", "utotal",energy);
+  printf("\"%s\" : %f,\n", "cutoff",FF_get_cutoff(ff));
+  printf("\"%s\" : %d,\n", "nbar",0); // nbar not defined
+  printf("\"%s\" : %10.3e,\n", "tol_dir",FF_get_tolDir(ff));
+  printf("\"%s\" : %.16e,\n", "utotal",energy);
   
   FILE *afile = fopen(accfile, "r");
   if (afile != NULL) {
@@ -135,10 +135,10 @@ int main(int argc, char **argv){
       max_acc_err = fmax(max_acc_err, err);
       ferror += err2 ;
     }
-    ferror = sqrt(ferror/(double)N)/Fref;
-    printf("%-30s : %25.16f\n", "detA",ff->detA);
-    printf("%-30s : %25.16e\n", "ferror",ferror);
-    printf("%-30s : %25.16e\n", "forceerror",max_acc_err/max_acc);
+    ferror = sqrt(ferror/(double)N); 
+    printf("\"%s\" : %25.16f,\n", "detA",ff->detA);
+    printf("\"%s\" : %25.16e,\n", "deltaF",ferror);
+    printf("\"%s\" : %25.16e,\n", "deltaF/Fref",ferror/Fref);
     fclose(afile);
   }
   
@@ -149,7 +149,7 @@ int main(int argc, char **argv){
     double energy_expected=0.0;
     fgets(line, sizeof line, pfile);
     sscanf(line,"%lf", &energy_expected);
-    printf("%-30s : %25.16e\n", "poterror",fabs(energy_expected-energy)/fabs(energy_expected));
+    printf("\"%s\" : %25.16e}\n", "poterror",fabs(energy_expected-energy)/fabs(energy_expected));
     fclose(pfile);
   }
   
