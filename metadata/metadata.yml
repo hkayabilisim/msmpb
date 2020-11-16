@@ -1,0 +1,18 @@
+metadata_version: 1
+name: Multilevel Summation for Periodic Electrostatics Using B-Splines
+description: A fast summation method for calculating electrostatics potential.
+tags:
+- N-body
+- electrostatics
+- Multivel Summation
+- Ewald
+authors:
+- name: Hüseyin Kaya
+  affiliations:
+  - name: Payten
+- name: Robert D. Skeel
+  affiliations:
+  - name: Arizona State University
+- name: David J. Hardy
+  affiliations:
+  - name: University of Illinois at Urbana-Champaign
