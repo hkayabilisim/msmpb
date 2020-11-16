@@ -55,15 +55,16 @@ int main(int argc, char **argv){
   // read it in by line number and character position
   char line[180];
   
-  fgets(line, sizeof line, ifile);
+  if (fgets(line, sizeof line, ifile) != NULL) 
   sscanf(line,"%lf%lf%lf%lf%lf%lf%lf%lf%lf",
          edge[0],edge[0]+1,edge[0]+2,
          edge[1],edge[1]+1,edge[1]+2,
          edge[2],edge[2]+1,edge[2]+2);
-  fgets(line, sizeof line, ifile);
-  int N; sscanf(line,"%d", &N);
+  int N;
+  if (fgets(line, sizeof line, ifile) != NULL)
+    sscanf(line,"%d", &N);
   for (int i = 0; i < N; i++) {
-    fgets(line, sizeof line, ifile);
+    if (fgets(line, sizeof line, ifile) != NULL)
     sscanf(line, "%lf%lf%lf%lf", &q[i], r[i], r[i]+1, r[i]+2);
   }
   fclose(ifile);
@@ -101,13 +102,13 @@ int main(int argc, char **argv){
   
   FILE *afile = fopen(accfile, "r");
   if (afile != NULL) {
-    fgets(line, sizeof line, afile);
+    if (fgets(line, sizeof line, afile) != NULL) {}
     for (int i = 0 ; i < N ; i++) {
-      fgets(line, sizeof line, afile); sscanf(line, "%lf", &(acc[i][0])); }
+      if (fgets(line, sizeof line, afile) != NULL) sscanf(line, "%lf", &(acc[i][0])); }
     for (int i = 0 ; i < N ; i++) {
-      fgets(line, sizeof line, afile); sscanf(line, "%lf", &(acc[i][1])); }
+      if (fgets(line, sizeof line, afile) != NULL) sscanf(line, "%lf", &(acc[i][1])); }
     for (int i = 0 ; i < N ; i++) {
-      fgets(line, sizeof line, afile); sscanf(line, "%lf", &(acc[i][2])); }
+      if (fgets(line, sizeof line, afile) != NULL) sscanf(line, "%lf", &(acc[i][2])); }
     
     // Converting acceleration into force
     for (int i = 0 ; i < N ; i++) {
@@ -147,8 +148,8 @@ int main(int argc, char **argv){
   
   if (pfile != NULL) {
     double energy_expected=0.0;
-    fgets(line, sizeof line, pfile);
-    sscanf(line,"%lf", &energy_expected);
+    if (fgets(line, sizeof line, pfile) != NULL)
+      sscanf(line,"%lf", &energy_expected);
     printf("\"%s\" : %25.16e}\n", "poterror",fabs(energy_expected-energy)/fabs(energy_expected));
     fclose(pfile);
   }

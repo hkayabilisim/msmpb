@@ -205,14 +205,28 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
     first[m_] = i;
   }
   // compute ranges - can be part of preprocessing
-  Vector a = {sqrt(A.xx*A.xx + A.yx*A.yx + A.zx*A.zx),
-               sqrt(A.xy*A.xy + A.yy*A.yy + A.zy*A.zy),
-               sqrt(A.xz*A.xz + A.yz*A.yz + A.zz*A.zz)};
-  double a_0_plus = a_0
-    + a.x/(double)gd.x + a.y/(double)gd.y+ a.z/(double)gd.z;
-  int nxlim = (int)ceil(as.x*(double)gd.x*a_0_plus - 1);
-  int nylim = (int)ceil(as.y*(double)gd.y*a_0_plus - 1);
-  int nzlim = (int)ceil(as.z*(double)gd.z*a_0_plus - 1);
+  // compute diameter of a grid cell
+	Vector HAx = {A.xx/(double)gd.x, A.yx/(double)gd.y, A.zx/(double)gd.z};
+	Vector HAy = {A.xy/(double)gd.x, A.yy/(double)gd.y, A.zy/(double)gd.z};
+	Vector HAz = {A.xz/(double)gd.x, A.yz/(double)gd.y, A.zz/(double)gd.z};
+	double off_yz = HAy.x*HAz.x + HAy.y*HAz.y + HAy.z*HAz.z;
+	double off_zx = HAz.x*HAx.x + HAz.y*HAx.y + HAz.z*HAx.z;
+	double off_xy = HAx.x*HAy.x + HAx.y*HAy.y + HAx.z*HAy.z;
+	if (off_yz * off_zx * off_xy < 0){
+		if (fabs(off_yz) < fabs(off_zx) && fabs(off_yz) < fabs(off_xy))
+			off_yz *= -1.;
+		else if (fabs(off_zx) < fabs(off_xy))
+			off_zx *= -1.;
+		else
+			off_xy *= -1.;}
+	Vector t = {copysign(1., off_yz), copysign(1., off_zx),copysign(1., off_xy)};
+	Vector At = prod(A, t);
+	Vector HAt = {At.x/(double)gd.x, At.y/(double)gd.y, At.z/(double)gd.z};
+	double diam = sqrt(HAt.x*HAt.x + HAt.y*HAt.y + HAt.z*HAt.z);
+  int nxlim = (int)ceil(as.x*(double)gd.x*a_0);
+  int nylim = (int)ceil(as.y*(double)gd.y*a_0);
+  int nzlim = (int)ceil(as.z*(double)gd.z*a_0);
+
   int nxd = 2*nxlim + 1 < gd.x ? 2*nxlim + 1 : gd.x;
   int nyd = 2*nylim + 1 < gd.y ? 2*nylim + 1 : gd.y;
   int nzd = 2*nzlim + 1 < gd.z ? 2*nzlim + 1 : gd.z;
@@ -227,10 +241,7 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
                     (double)ny/(double)gd.y, (double)nz/(double)gd.z};
         Vector r = prod(A, s);
         double normr = sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
-        Vector ATr = prodT(A, r);
-        double HATr = fabs(ATr.x)/(double)gd.x
-          + fabs(ATr.y)/(double)gd.y + fabs(ATr.z)/(double)gd.z;
-        if (normr - HATr/normr < a_0){
+        if (normr - diam < a_0){
           Triple nk = {nx, ny, nz};
           n[k] = nk;
           k++;}

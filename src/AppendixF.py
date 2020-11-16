@@ -1,17 +1,16 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import subprocess
-import json
+from msmpb_util import *
 
-experiments = [{"L": 1, "nu": 4, "M": [45, 50, 60, 64, 70, 72, 75, 80, 90]},
-               {"L": 1, "nu": 6, "M": [45, 50, 60, 64, 70, 72, 75, 80, 90]},
+experiments = [{"L": 1, "nu": 4, "M": [70, 72, 75, 80, 90]},
+               {"L": 1, "nu": 6, "M": [70, 72, 75, 80, 90]},
                {"L": 2, "nu": 4, "M": [32, 36, 40, 42, 48]},
                {"L": 2, "nu": 6, "M": [32, 36, 40, 42, 48]},
                {"L": 3, "nu": 4, "M": [28, 32, 36, 40, 48]},
                {"L": 3, "nu": 6, "M": [28, 32, 36, 40, 48]}]
-           
+
 href={4:0.83,6:1}
 aref={4:7   ,6:6}
+
+box44 = {'name':'Box44'    ,'N':65850,'A':88}
 
 print("%1s %2s %10s %4s %6s %8s %8s"%("L","nu","M(finest)","h","a0","time","error"))
 for experiment in experiments:
@@ -21,18 +20,39 @@ for experiment in experiments:
     experiment["time"] = []
     experiment["error"] = []
     for M in Mrange:
-        A = 88 # Box44 data
+        A = box44['A']
         h1 = A/M
         a1_0 = aref[nu]*((h1/href[nu])**(1-1/nu))
-        a0 = a1_0 #* ((4/3)*(1-2**(-L)))**(1/nu)
+        a0 = a1_0 
         times = np.zeros((5,1))
         for run in range(5):
-            out = subprocess.run(['./msmpb','../data/Box44','-L',str(L),'--a0',str(a0),'--nu',str(nu),'-M',str(M/(2**(L-1)))]\
-                     ,stdout=subprocess.PIPE)
-            msmout = json.loads(out.stdout)
+            Mtoplevel = M//(2**(L-1))
+            msmout = runMSM(box44,Mtoplevel,a0,nu,L)
             times[run]=msmout['time_total']
             error=msmout['deltaF/Fref']
         time = np.mean(times)
         experiment["time"].append(time)
         experiment["error"].append(error)
         print("%1d %2d %10d %4.2f %6.3f %8.3f %8.3e"%(L,  nu,  M, h1,   a0,   time,error))
+        
+        
+print("----- Appendix F ------")
+for order in [4,6]:
+    print("Order is %d"%order)
+    for level in [1,2,3]:
+        for experiment in experiments:
+            if experiment['L'] == level and experiment['nu'] == order:               
+                print("%20s MSM L=%d "%("Force Errorx1e4",level),end='')
+                for error in experiment['error']:
+                    print("%5.2f "%(error*1e4),end='')
+                print("")    
+    for level in [1,2,3]:
+        for experiment in experiments:
+            if experiment['L'] == level and experiment['nu'] == order:                      
+                print("%20s MSM L=%d "%("Time",level),end='')
+                for error in experiment['time']:
+                    print("%5.2f "%error,end='')
+                print("")          
+              
+                
+    

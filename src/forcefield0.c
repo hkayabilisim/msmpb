@@ -706,7 +706,7 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   free(psi);
 }
 
-double *padding_z(FF *ff,int l,double *ql,Triple gd, Triple sd){
+double *padding_z(FF *ff,int l,const double* restrict ql,Triple gd, Triple sd){
   msm4g_tic();
   int gdznew = gd.z + sd.z;
   double *qlnew = calloc(gd.x*gd.y*gdznew, sizeof(double));
