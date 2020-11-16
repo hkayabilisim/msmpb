@@ -356,7 +356,7 @@ double FF_get_deltaF(FF *ff) {
 
   int index = (nu - 4)/2;
   //double C[4] = {0.21,1.24,17.59,452.94};
-  double C[4] = {1,1,1,1};
+  double C[4] = {0.825169,5.16701,73.6508,1977.23};
   
   Matrix A = *(Matrix *)ff->A;
   double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
