@@ -32,13 +32,14 @@ for i in range(len(results)):
 
 
 fig, axes = plt.subplots(nrows=1, ncols=4)
+plt.rcParams.update({'font.size': 12})
 fig.set_size_inches(12, 10.5)
 for order in [4,6,8,10]:
     ax = axes[order//2-2]
     for nparticles in np.unique(N):
         for cutoff in np.unique(a0):
             idx = (nu == order) & (N == nparticles) & (cutoff == a0);
-            ax.loglog(M[idx]/(N[idx])**(1/3),error[idx],'LightGray')
+            ax.loglog(M[idx]/(N[idx])**(1/3),error[idx],'gray',linewidth=2)
             
             
     nuidx = order == nu;
@@ -46,7 +47,7 @@ for order in [4,6,8,10]:
     xmin=np.min(MN);
     xmax=np.max(MN);
     slope1minusNU = (10**(-order/2-1) )* ([xmin, xmax]/xmin)**(1-order);
-    ax.loglog([xmin, xmax],slope1minusNU,'red',label=r'$(M/N^{1/3})^{1-\nu}$');
+    ax.loglog([xmin, xmax],slope1minusNU,'red',linewidth=2,label=r'$(M/N^{1/3})^{1-\nu}$');
     ax.set_ylim((1e-9,1e-2))  
     ax.set_xticks([2, 3,4])
     ax.set_xticklabels(['2','3','4'])
@@ -54,7 +55,7 @@ for order in [4,6,8,10]:
     ax.set_xlabel(r'$M/N^{1/3}$')
     ax.legend()
     ax.set_title(r'$\nu=%d$'%order)
-    ax.grid(b=True, which='both', color='0.93')
+    ax.grid(b=True, which='both',linestyle='dotted',color='lightgrey')
 fig.tight_layout(pad=1.0)       
 fig.savefig('../results/Figure1.pdf', dpi=100)
 
