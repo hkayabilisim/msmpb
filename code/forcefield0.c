@@ -706,6 +706,32 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   free(psi);
 }
 
+double *padding_xyz(FF *ff,int l,const double* restrict ql,Triple gd, Triple sd){
+  msm4g_tic();
+  int gdznew = gd.z + sd.z;
+  int gdynew = gd.y + sd.y;
+  int gdxnew = gd.x + sd.x;
+  double *qlnew = calloc(gdxnew*gdynew*gdznew, sizeof(double));
+  
+  for (int i = 0 ; i < gdxnew ;i++) {
+    for (int j = 0 ; j < gdynew ;j++) {
+      for (int k = 0 ; k < gdznew ;k++) {
+        int qx = i - sd.x/2 ;
+        int qy = j - sd.y/2 ;
+        int qz = k - sd.z/2 ;
+        while (qx < 0) qx += gd.x; qx = qx % gd.x;
+        while (qy < 0) qy += gd.y; qy = qy % gd.y;
+        while (qz < 0) qz += gd.z; qz = qz % gd.z;
+        int oldindex = qx * gd.y * gd.z + qy * gd.z + qz;
+        int newindex = i * gdynew * gdznew + j * gdznew + k;
+        qlnew[newindex] = ql[oldindex];
+      }
+    }
+  }
+  ff->time_padding[l] = msm4g_toc(); 
+  return qlnew;
+}
+
 double *padding_z(FF *ff,int l,const double* restrict ql,Triple gd, Triple sd){
   msm4g_tic();
   int gdznew = gd.z + sd.z;
@@ -729,40 +755,33 @@ double *padding_z(FF *ff,int l,const double* restrict ql,Triple gd, Triple sd){
 }
 void grid2grid(FF* restrict ff,const int l,const Triple gd, double* restrict el, const double* restrict ql,
                const Triple sd, const double* restrict kh){
-  double* restrict qlnew = padding_z(ff,l,ql,gd,sd);
+  double* restrict qlnew = padding_xyz(ff,l,ql,gd,sd);
   //printf("Grid: %2d %2d %2d Stencil: %2d %2d %2d\n",gd.x,gd.y,gd.z,sd.x,sd.y,sd.z); 
   msm4g_tic();
+  int gdxnew = gd.x + sd.x ;
+  int gdynew = gd.y + sd.y ;
   int gdznew = gd.z + sd.z ;
-  for (int mx = 0; mx < gd.x; mx++) {
-    int mxoff = mx * gd.y * gd.z;
-    for (int my = 0; my < gd.y; my++) {
-      int myoff = mxoff + my * gd.z;
-      for (int mz = 0; mz < gd.z; mz++){
-        int mzoff = myoff + mz;
-        double elsum = 0.0;
-        int mxw = mx - sd.x/2;
-        while (mxw < 0) { mxw += gd.x; }
-        int kxoff = mxw * gd.y * gdznew ;
-        for (int nxoff = 0 ; nxoff < sd.x*sd.y*sd.z ; nxoff += sd.y * sd.z){
-          int myw = my - sd.y/2 ;
-          while (myw < 0) { myw += gd.y ;}
-          int kyoff = kxoff + myw * gdznew ;
-          for (int nyoff = nxoff; nyoff < nxoff + sd.y*sd.z ; nyoff += sd.z) {
-            int kzoff = kyoff + mz ;
-            for (int nzoff = nyoff; nzoff < nyoff + sd.z; nzoff++){
-              elsum += kh[nzoff]*qlnew[kzoff];
-              kzoff++;
+ 
+  for (int ex = 0 ; ex < gd.x ; ex++) {
+    for (int kx = 0 ; kx < sd.x ; kx++) {
+      for (int ey = 0 ; ey < gd.y ; ey++) {
+        for (int ky = 0 ; ky < sd.y ; ky++) {
+          for (int ez = 0 ; ez < gd.z ; ez++) {
+            for (int kz = 0 ; kz < sd.z ; kz++) {
+              int qx = ex + kx ; 
+              int qy = ey + ky ;
+              int qz = ez + kz ;
+              int e_idx = ex * gd.y * gd.z + ey * gd.z + ez; 
+              int q_idx = qx * gdynew * gdznew + qy * gdznew + qz;
+              int k_idx = kx * sd.y * sd.z + ky * sd.z + kz;
+              el[e_idx] += kh[k_idx] * qlnew[q_idx];
             }
-            kyoff += gdznew;
-            kyoff -= kyoff >= kxoff + gd.y* gdznew ? gd.y * gdznew : 0;
           }
-          kxoff += gd.y * gdznew;
-          kxoff -= kxoff >= gd.x * gd.y * gdznew ? gd.x * gd.y * gdznew : 0;
         }
-        el[mzoff] += elsum ;
       }
     }
-  }
+  } 
+
   ff->time_grid2grid[l] = msm4g_toc();
   free(qlnew);
 }
