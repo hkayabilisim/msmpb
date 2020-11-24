@@ -52,6 +52,7 @@ for order in [4,6]:
 plt.figure(figsize=(30,15))
 plt.rcParams.update({'font.size': 22})
 plt.subplots_adjust(wspace=0.2)
+theorymins = [1.2e-3,1e-3]
 for i in [1,2]:
     order = 2*(i+1)
     idx = order == data[:,0]
@@ -65,7 +66,7 @@ for i in [1,2]:
     ax.scatter(results[idx,2],results[idx,3],500, \
                         label='PME', \
                         edgecolor='k',marker='s')
-    theorymin =   1.2e-3
+    theorymin =   theorymins[i-1]
     theorymax =   results[0,1]*(xmax/xmin)**(-order/3)
     ax.plot([xmin,xmax],[theorymin,theorymax])
     plt.yscale("log")
