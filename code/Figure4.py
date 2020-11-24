@@ -18,8 +18,8 @@ for i in range(data.shape[0]):
     pmeout = runPME(box44,M,a0,nu)
     results[i][2]=pmeout['time_total']
     results[i][3]=pmeout['deltaF/Fref']
-    print("%2d %3d %5.2f %8.3f %8.3e %8.3f %8.3e"%(nu,M,a0,results[i][0],results[i][1],results[i][2],results[i][3]))
-
+    print("%2d %3d %5.2f %8.3f %8.3e %8.3f %8.3e"%(nu,M,a0,results[i][0],results[i][1],results[i][2],results[i][3]))  
+    
 print("----- TABLE 4 ------")
 for order in [4,6]:
     print("Order is %d"%order)
@@ -49,8 +49,9 @@ for order in [4,6]:
         print("%5.2f "%(results[idx,0]),end='')
     print("")    
     
-plt.figure(figsize=(20,10))
+plt.figure(figsize=(30,15))
 plt.rcParams.update({'font.size': 22})
+plt.subplots_adjust(wspace=0.2)
 for i in [1,2]:
     order = 2*(i+1)
     idx = order == data[:,0]
@@ -64,15 +65,15 @@ for i in [1,2]:
     ax.scatter(results[idx,2],results[idx,3],500, \
                         label='PME', \
                         edgecolor='k',marker='s')
-    theorymin =   1e-3
+    theorymin =   1.2e-3
     theorymax =   results[0,1]*(xmax/xmin)**(-order/3)
     ax.plot([xmin,xmax],[theorymin,theorymax])
     plt.yscale("log")
     plt.xscale("log")
-    plt.xlabel("Total Time")
-    plt.ylabel("Error")
-    plt.legend()
+    plt.xlabel("Cost")
+    plt.ylabel("Relative Force Error")
+    plt.legend(loc='lower right')
     plt.xlim([xmin,xmax])
     plt.ylim([0.9*min(results[idx,:].min(axis=0)[[1,3]]),1.1*max(results[idx,:].max(axis=0)[[1,3]])])
     plt.title(r'$\nu='+str(order)+'$')
-plt.savefig('../results/Figure4.pdf')      
+plt.savefig('../results/Figure4.pdf')     
