@@ -33,7 +33,7 @@ for i in range(len(results)):
 
 fig, axes = plt.subplots(nrows=1, ncols=4)
 plt.rcParams.update({'font.size': 12})
-fig.set_size_inches(12, 10.5)
+fig.set_size_inches(12, 9)
 for order in [4,6,8,10]:
     ax = axes[order//2-2]
     for nparticles in np.unique(N):
@@ -48,7 +48,7 @@ for order in [4,6,8,10]:
     xmax=np.max(MN);
     slope1minusNU = (10**(-order/2-1) )* ([xmin, xmax]/xmin)**(1-order);
     ax.loglog([xmin, xmax],slope1minusNU,'red',linewidth=2,label=r'$(M/N^{1/3})^{1-\nu}$');
-    ax.set_ylim((1e-9,1e-2))  
+    ax.set_ylim((1e-9,1e-3))  
     ax.set_xticks([2, 3,4])
     ax.set_xticklabels(['2','3','4'])
     ax.set_ylabel('relative force error')

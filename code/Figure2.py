@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from msmpb_util import *
 import subprocess
 import json
-
+import pandas as pd
 
 data = [{'name':'spceN300' ,'N':300  ,'A':20},
         {'name':'spceN600' ,'N':600  ,'A':20},
@@ -12,7 +12,6 @@ data = [{'name':'spceN300' ,'N':300  ,'A':20},
         {'name':'Box44'    ,'N':65850,'A':88}]
 
 eta = 5.7
-
 
 training = []
 testing = []
@@ -45,39 +44,38 @@ print("Fudge factors (training)")
 print(fudgefactors)
 
 print("Training -- (fudgefactors applied!)")
-displayResult(training,fudgefactors)
+displayResult(training,fudgefactors,"../results/Figure2-training.txt")
 print("Testing -- (fudgefactors applied!)")
-displayResult(testing,fudgefactors)
+displayResult(testing,fudgefactors,"../results/Figure2-testing.txt")
 
 
-plt.figure(figsize=(40,20))
-plt.rcParams.update({'font.size': 22})
-ax1 = plt.subplot(1,2,1)
-plotEstimatedVersusTrue(ax1,training,fudgefactors)
-ax2 = plt.subplot(1,2,2)
-plotEstimatedVersusTrue(ax2,testing,fudgefactors)
-plt.savefig('../results/Figure2-nu.pdf')  
+trn = pd.read_csv('../results/Figure2-training.txt',delim_whitespace=True)
+tst = pd.read_csv('../results/Figure2-testing.txt',delim_whitespace=True)
 
-plt.figure(figsize=(40,20))
-plt.rcParams.update({'font.size': 22})
-ax1 = plt.subplot(1,2,1)
-plotEstimatedVersusTrueWRTa0(ax1,training,fudgefactors)
-ax2 = plt.subplot(1,2,2)
-plotEstimatedVersusTrueWRTa0(ax2,testing,fudgefactors)
-plt.savefig('../results/Figure2-a0.pdf')  
+trntst = pd.concat([trn,tst])
+data = [trn,trntst]
 
-plt.figure(figsize=(40,20))
-plt.rcParams.update({'font.size': 22})
-ax1 = plt.subplot(1,2,1)
-plotEstimatedVersusTrueWRTM(ax1,training,fudgefactors)
-ax2 = plt.subplot(1,2,2)
-plotEstimatedVersusTrueWRTM(ax2,testing,fudgefactors)
-plt.savefig('../results/Figure2-M.pdf')  
 
-plt.figure(figsize=(40,20))
-plt.rcParams.update({'font.size': 22})
-ax1 = plt.subplot(1,2,1)
-plotEstimatedVersusTrueWRTN(ax1,training,fudgefactors)
-ax2 = plt.subplot(1,2,2)
-plotEstimatedVersusTrueWRTN(ax2,testing,fudgefactors)
-plt.savefig('../results/Figure2-N.pdf')  
+fig = plt.figure(figsize=(12, 4))
+spec = fig.add_gridspec(ncols=2, nrows=1)
+plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.7)
+for i in [0,1]:
+    ax = fig.add_subplot(spec[0,i])
+    subdata = data[i]
+    ax.grid(b=True, which='major',linestyle='dotted',color='lightgrey')
+    ax.plot([1e-8, 1e-2],[1e-8, 1e-2],'k',label=None)
+    ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.set_xlabel("estimated")
+    ax.set_ylabel("true")
+    ax.set_xlim(1e-8, 1e-2)
+    ax.set_ylim(1e-8, 1e-2)
+    for nu in [4,6,8,10]:
+        x = subdata[subdata['nu'] == nu]
+        ax.scatter(x['est'],x['true'],label=r'$\nu='+str(nu)+'$',
+                  edgecolor='k')
+    ax.legend()
+    #ax.axis('equal')
+
+fig.savefig('../results/Figure2.pdf', dpi=100)
+ 

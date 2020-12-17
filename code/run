@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 set -ex
-
 make
-
 python3 Figure1.py    > ../results/Figure1.txt
 python3 Figure2.py    > ../results/Figure2.txt
-
-# Figure 4, Table 3,4,and Appendix E
 python3 Figure4.py    > ../results/Figure4.txt  
-
-# Table 2, Appendix F
 python3 AppendixF.py  > ../results/AppendixF.txt

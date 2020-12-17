@@ -755,8 +755,8 @@ double *padding_z(FF *ff,int l,const double* restrict ql,Triple gd, Triple sd){
 }
 void grid2grid(FF* restrict ff,const int l,const Triple gd, double* restrict el, const double* restrict ql,
                const Triple sd, const double* restrict kh){
-  //printf("Grid: %2d %2d %2d Stencil: %2d %2d %2d\n",gd.x,gd.y,gd.z,sd.x,sd.y,sd.z); 
   double* restrict qlnew = padding_xyz(ff,l,ql,gd,sd);
+  //printf("Grid: %2d %2d %2d Stencil: %2d %2d %2d\n",gd.x,gd.y,gd.z,sd.x,sd.y,sd.z); 
   msm4g_tic();
   int gdxnew = gd.x + sd.x ;
   int gdynew = gd.y + sd.y ;
@@ -781,40 +781,6 @@ void grid2grid(FF* restrict ff,const int l,const Triple gd, double* restrict el,
       }
     }
   } 
-  /*
-  double* restrict qlnew = padding_z(ff,l,ql,gd,sd);
-  msm4g_tic();
-  int gdznew = gd.z + sd.z ;
-  for (int mx = 0; mx < gd.x; mx++) {
-    int mxoff = mx * gd.y * gd.z;
-    for (int my = 0; my < gd.y; my++) {
-      int myoff = mxoff + my * gd.z;
-      for (int mz = 0; mz < gd.z; mz++){
-        int mzoff = myoff + mz;
-        double elsum = 0.0;
-        int mxw = mx - sd.x/2;
-        while (mxw < 0) { mxw += gd.x; }
-        int kxoff = mxw * gd.y * gdznew ;
-        for (int nxoff = 0 ; nxoff < sd.x*sd.y*sd.z ; nxoff += sd.y * sd.z){
-          int myw = my - sd.y/2 ;
-          while (myw < 0) { myw += gd.y ;}
-          int kyoff = kxoff + myw * gdznew ;
-          for (int nyoff = nxoff; nyoff < nxoff + sd.y*sd.z ; nyoff += sd.z) {
-            int kzoff = kyoff + mz ;
-            for (int nzoff = nyoff; nzoff < nyoff + sd.z; nzoff++){
-              elsum += kh[nzoff]*qlnew[kzoff];
-              kzoff++;
-            }
-            kyoff += gdznew;
-            kyoff -= kyoff >= kxoff + gd.y* gdznew ? gd.y * gdznew : 0;
-          }
-          kxoff += gd.y * gdznew;
-          kxoff -= kxoff >= gd.x * gd.y * gdznew ? gd.x * gd.y * gdznew : 0;
-        }
-        el[mzoff] += elsum ;
-      }
-    }
-  } */
 
   ff->time_grid2grid[l] = msm4g_toc();
   free(qlnew);

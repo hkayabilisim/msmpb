@@ -80,8 +80,9 @@ def fudgeFactor(results):
         factors.append(factor)
     return factors
 
-def displayResult(results,fudgefactors):
-    print("%20s %5s %2s %5s %2s %8s %2s %10s %10s %s"%("data","N","A","nbar","M","a0","nu","true","est","|log(true)-log(est)|"))
+def displayResult(results,fudgefactors,filename):
+    fp = open(filename,"w")
+    print("%20s %5s %2s %5s %2s %8s %2s %10s %10s %s"%("data","N","A","nbar","M","a0","nu","true","est","|log(true)-log(est)|"),file=fp)
     for r in results:
         M = r['TopLevelMx']
         A = r['Edge row1'][0]
@@ -91,8 +92,8 @@ def displayResult(results,fudgefactors):
         true = r["deltaF/Fref"]
         diff = np.abs(np.log(est)-np.log(true))
         print("%20s %5d %2d %5.2f %2d %8.3f %2d %10.3e %10.3e %5.3f" \
-              %(r['data'],r['N'],A,nbar,M,r['cutoff'],nu,true,est,diff))
-
+              %(r['data'],r['N'],A,nbar,M,r['cutoff'],nu,true,est,diff),file=fp)
+    fp.close()
 
 def plotEstimatedVersusTrue(ax,results,fudgefactors):
     k = len(results)

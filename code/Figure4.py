@@ -1,4 +1,5 @@
 from msmpb_util import *
+import pandas as pd
 
 data = np.transpose(np.array([[  4, 4 ,  4,  4,  4,  4,  4,  4,  4,  4,  6,  6,  6,  6,  6,  6,  6,  6,  6], \
                  [ 108, 90, 80, 75, 72, 70, 64, 60, 50, 44, 90, 80, 75, 72, 70, 64, 60, 50, 44],\
@@ -6,7 +7,8 @@ data = np.transpose(np.array([[  4, 4 ,  4,  4,  4,  4,  4,  4,  4,  4,  6,  6, 
 box44 = {'name':'Box44'    ,'N':65850,'A':88}
 results = np.zeros((data.shape[0],4))
 
-print("%2s %3s %5s %8s %8s %8s %8s"%("nu","M","a0","timeMSM","errMSM","timePME","errPME"))
+fp = open("../results/Figure4-data.txt","w")
+print("%2s %3s %5s %8s %8s %8s %8s"%("nu","M","a0","timeMSM","errMSM","timePME","errPME"),file=fp)
 for i in range(data.shape[0]):
     nu = data[i][0]
     M = data[i][1]
@@ -18,9 +20,11 @@ for i in range(data.shape[0]):
     pmeout = runPME(box44,M,a0,nu)
     results[i][2]=pmeout['time_total']
     results[i][3]=pmeout['deltaF/Fref']
-    print("%2d %3d %5.2f %8.3f %8.3e %8.3f %8.3e"%(nu,M,a0,results[i][0],results[i][1],results[i][2],results[i][3]))  
-    
-print("----- TABLE 4 ------")
+    print("%2d %3d %5.2f %8.3f %8.3e %8.3f %8.3e"%(nu,M,a0,results[i][0],results[i][1],results[i][2],results[i][3]),file=fp)  
+fp.close()
+
+
+print("----- TABLE III, IV ------")
 for order in [4,6]:
     print("Order is %d"%order)
     print("%20s %3s "%("","h"),end='')
@@ -47,34 +51,54 @@ for order in [4,6]:
     for grid in np.unique(data[nuidx,1]):
         idx = nuidx & (grid == data[:,1])    
         print("%5.2f "%(results[idx,0]),end='')
-    print("")    
-    
-plt.figure(figsize=(30,15))
-plt.rcParams.update({'font.size': 22})
-plt.subplots_adjust(wspace=0.2)
-theorymins = [1.2e-3,1e-3]
-for i in [1,2]:
-    order = 2*(i+1)
-    idx = order == data[:,0]
+    print("")        
 
-    xmin = 0.9*min(results[idx,:].min(axis=0)[[0,2]])
-    xmax = 1.1*max(results[idx,:].max(axis=0)[[0,2]])
-    ax = plt.subplot(1,2,i)
-    ax.scatter(results[idx,0],results[idx,1],500, \
+data = pd.read_csv('../results/Figure4-data.txt',delim_whitespace=True)
+
+fig = plt.figure(figsize=(12, 4))
+spec = fig.add_gridspec(ncols=2, nrows=1)
+plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.7)
+
+theorymins = [1.1e-3,6e-4]
+for i in [0,1]:
+    order = 2*(i+2)
+    idx = order == data['nu']
+
+    xmin = 0.9*min(data[idx].min(axis=0)[[3,5]])
+    xmax = 1.1*max(data[idx].max(axis=0)[[3,5]])
+    ymin = 0.9*min(data[idx].min(axis=0)[[4,6]])
+    ymax = 1.1*max(data[idx].max(axis=0)[[4,6]])
+
+    ax = fig.add_subplot(spec[0,i])
+    ax.scatter(data['timeMSM'][idx],data['errMSM'][idx], \
                         label='MSM', \
                         edgecolor='k')
-    ax.scatter(results[idx,2],results[idx,3],500, \
+    ax.scatter(data['timePME'][idx],data['errPME'][idx], \
                         label='PME', \
                         edgecolor='k',marker='s')
-    theorymin =   theorymins[i-1]
-    theorymax =   results[0,1]*(xmax/xmin)**(-order/3)
+    theorymin =   theorymins[i]
+    theorymax =   theorymin*(xmax/xmin)**(-order/3)
     ax.plot([xmin,xmax],[theorymin,theorymax])
-    plt.yscale("log")
-    plt.xscale("log")
-    plt.xlabel("Cost")
-    plt.ylabel("Relative Force Error")
-    plt.legend(loc='lower right')
-    plt.xlim([xmin,xmax])
-    plt.ylim([0.9*min(results[idx,:].min(axis=0)[[1,3]]),1.1*max(results[idx,:].max(axis=0)[[1,3]])])
+    ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.set_xlabel("Cost")
+    ax.set_ylabel(r'Relative Force Error x $10^4$')
+    ax.legend(loc='lower right')
+    if order == 6:
+        plt.xticks([1.2,1.4,1.6,1.8,2.0,2.2,2.4,2.6,2.8],['1.2','','','','2','','','','2.8'])
+        plt.yticks([2e-4,3e-4,4e-4,6e-4,1e-3],['2','3','4','6','10'])
+    if order == 4:
+        plt.xticks([2,3,4],['2','3','4'])
+        plt.yticks([4e-4,6e-4,1e-3],['4','6','10'])
+    ax.set_xlim(xmin,xmax)
+    ax.set_ylim(ymin,ymax)
+
+    ax.grid(b=True, which='both',linestyle='dotted',color='lightgrey')
+    #ax.ticklabel_format(useOffset=False)
+    #ax.xaxis.set_minor_formatter(mticker.ScalarFormatter())
+        
     plt.title(r'$\nu='+str(order)+'$')
-plt.savefig('../results/Figure4.pdf')     
+plt.savefig('../results/Figure4.pdf')
+
+
+    
