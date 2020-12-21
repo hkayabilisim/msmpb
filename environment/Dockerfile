@@ -1,15 +1,17 @@
-# hash:sha256:da9803e3c54579d9a8731e4ccff8d06eababfed06d3e81bd241819361c070c60
+# hash:sha256:146ef96d9cfab47e7afab7fc7524cfb227feef8c6f363bedf641d398a480fff5
 FROM registry.codeocean.com/codeocean/miniconda3:4.7.10-python3.7-ubuntu18.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
+    && apt-get install -y --no-install-recommends software-properties-common \
+    && apt-get purge -y --autoremove software-properties-common \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
-        libfftw3-dev=3.3.4-2ubuntu1 \
+        libfftw3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN conda install -y \
-        json \
         matplotlib \
         pandas \
     && conda clean -ya

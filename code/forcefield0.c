@@ -531,7 +531,9 @@ static double invert(Matrix *A) {  // invert A
                 - a[(j+2)%3][(i+1)%3]*a[(j+1)%3][(i+2)%3];
   // A adj(A) = (det A) I
   double detA = a[0][0]*ai[0][0] + a[0][1]*ai[1][0] + a[0][2]*ai[2][0];
-  for (int j = 0; j < 9; j++) a[0][j] = ai[0][j]/detA;
+  for (int i = 0; i < 3; i++) 
+    for (int j = 0; j < 3; j++)
+      a[i][j] = ai[i][j]/detA;
   return fabs(detA);}
 
 static void omegap(FF *ff){
