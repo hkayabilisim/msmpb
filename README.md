@@ -1,11 +1,13 @@
 Introduction
 ------------
-This Code Ocean capsule is created to reproduce the results 
+[This Code Ocean capsule](https://codeocean.com/capsule/4293677/tree) is created to reproduce the results 
 presented in the following manuscript:
 
 H. Kaya, D. J. Hardy and R. D. Skeel, 
 "Multilevel Summation for Periodic Electrostatics Using B-Splines",
 Journal of Chemical Physics, submitted to Journal of Chemical Physics on 2020 December.
+
+Please visit published Code Ocean capsule:
 
 Mapping
 -------
