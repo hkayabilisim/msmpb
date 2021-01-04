@@ -84,3 +84,13 @@ double FF_get_deltaF(FF *ff);
 double msm4g_tictocmanager(int push) ;
 void msm4g_tic(void);
 double msm4g_toc(void);
+
+#define max(a,b) \
+({ __typeof__ (a) _a = (a); \
+  __typeof__ (b) _b = (b); \
+  _a > _b ? _a : _b; })
+
+#define min(a,b) \
+({ __typeof__ (a) _a = (a); \
+  __typeof__ (b) _b = (b); \
+  _a > _b ? _b : _a; })

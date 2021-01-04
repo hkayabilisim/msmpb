@@ -708,61 +708,18 @@ static void dAL(FF *ff, Triple gd, Triple sd, double kh[], double detA){
   free(psi);
 }
 
-double *padding_xyz(FF *ff,int l,const double* restrict ql,Triple gd, Triple sd){
-  msm4g_tic();
-  int gdznew = gd.z + sd.z;
-  int gdynew = gd.y + sd.y;
-  int gdxnew = gd.x + sd.x;
-  double *qlnew = calloc(gdxnew*gdynew*gdznew, sizeof(double));
-  
-  for (int i = 0 ; i < gdxnew ;i++) {
-    for (int j = 0 ; j < gdynew ;j++) {
-      for (int k = 0 ; k < gdznew ;k++) {
-        int qx = i - sd.x/2 ;
-        int qy = j - sd.y/2 ;
-        int qz = k - sd.z/2 ;
-        while (qx < 0) qx += gd.x; qx = qx % gd.x;
-        while (qy < 0) qy += gd.y; qy = qy % gd.y;
-        while (qz < 0) qz += gd.z; qz = qz % gd.z;
-        int oldindex = qx * gd.y * gd.z + qy * gd.z + qz;
-        int newindex = i * gdynew * gdznew + j * gdznew + k;
-        qlnew[newindex] = ql[oldindex];
-      }
-    }
-  }
-  ff->time_padding[l] = msm4g_toc(); 
-  return qlnew;
-}
-
-double *padding_z(FF *ff,int l,const double* restrict ql,Triple gd, Triple sd){
-  msm4g_tic();
-  int gdznew = gd.z + sd.z;
-  double *qlnew = calloc(gd.x*gd.y*gdznew, sizeof(double));
-  for (int mx = 0 ; mx < gd.x ; mx++){
-    for (int my = 0 ; my < gd.y ; my++){
-      for (int mz = - sd.z/2 ; mz < 0 ; mz++){
-        int qlindex = (mx*gd.y + my)*gd.z + (mz + gd.z)%gd.z;
-        int qlnewindex = (mx*gd.y + my)*gdznew + (mz + sd.z/2);
-        qlnew[qlnewindex] = ql[qlindex];}
-      for (int mz = 0 ; mz < gd.z ; mz++){
-        int qlindex = (mx*gd.y + my)*gd.z + mz;
-        int qlnewindex = (mx*gd.y + my)*gdznew + (mz + sd.z/2);
-        qlnew[qlnewindex] = ql[qlindex];}
-      for (int mz = gd.z ; mz < gd.z + (sd.z +1)/2 ; mz++) {
-        int qlindex = (mx*gd.y + my)*gd.z + (mz - gd.z)%gd.z;
-        int qlnewindex = (mx*gd.y + my)*gdznew + (mz + sd.z/2);
-        qlnew[qlnewindex] = ql[qlindex];}}}
-  ff->time_padding[l] = msm4g_toc();
-  return qlnew;
-}
 void grid2grid(FF* restrict ff,const int l,const Triple gd, double* restrict el, const double* restrict ql,
                const Triple sd, const double* restrict kh){
-  double* restrict qlnew = padding_xyz(ff,l,ql,gd,sd);
-  //printf("Grid: %2d %2d %2d Stencil: %2d %2d %2d\n",gd.x,gd.y,gd.z,sd.x,sd.y,sd.z); 
   msm4g_tic();
-  int gdxnew = gd.x + sd.x ;
-  int gdynew = gd.y + sd.y ;
-  int gdznew = gd.z + sd.z ;
+  int dmax = 2 * ff->nLim + 1;
+  int nu = ff->orderAcc;
+  int gdxnew = gd.x + max(min(dmax,gd.x),nu);
+  int gdynew = gd.y + max(min(dmax,gd.y),nu);
+  int gdznew = gd.z + max(min(dmax,gd.z),nu);
+  int ofx = 0, ofy = 0, ofz = 0;
+  if (nu > min(dmax,gd.x)) ofx = nu/2 - min(dmax,gd.x)/2;
+  if (nu > min(dmax,gd.y)) ofy = nu/2 - min(dmax,gd.y)/2;
+  if (nu > min(dmax,gd.z)) ofz = nu/2 - min(dmax,gd.z)/2;
  
   for (int ex = 0 ; ex < gd.x ; ex++) {
     for (int kx = 0 ; kx < sd.x ; kx++) {
@@ -774,18 +731,16 @@ void grid2grid(FF* restrict ff,const int l,const Triple gd, double* restrict el,
               int qy = ey + ky ;
               int qz = ez + kz ;
               int e_idx = ex * gd.y * gd.z + ey * gd.z + ez; 
-              int q_idx = qx * gdynew * gdznew + qy * gdznew + qz;
+              int q_idx = (qx + ofx) * gdynew * gdznew + (qy + ofy) * gdznew + (qz + ofz);
               int k_idx = kx * sd.y * sd.z + ky * sd.z + kz;
-              el[e_idx] += kh[k_idx] * qlnew[q_idx];
+              el[e_idx] += kh[k_idx] * ql[q_idx];
             }
           }
         }
       }
     }
-  } 
-
+  }
   ff->time_grid2grid[l] = msm4g_toc();
-  free(qlnew);
 }
 
 static void DFT(Triple gd, double dL[], double khatL[]){

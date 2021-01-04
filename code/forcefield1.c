@@ -23,7 +23,7 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
                             double *charge);
 static void anterpolate(FF *ff, Triple gd, double *q, int N, double *charge,
                         Vector *r);
-static void restrict_(FF *ff, Triple gd, double *ql, double *qlm1);
+static void restrict_(FF *ff, Triple gd, double *ql, double *qlm1, int lm1);
 static void prolongate(FF *ff, Triple gd, double *el, double *elp1);
 void grid2grid(FF* restrict ff,const int l,const Triple gd,
                double* restrict el, const double* restrict ql,
@@ -54,6 +54,49 @@ void msm4g_tic() {
 
 double msm4g_toc() {
   return msm4g_tictocmanager(0);
+}
+
+void padding(FF *ff,double* ql, Triple gd, int l){
+  msm4g_tic();
+  int nu = ff->orderAcc;
+  int dmax = 2*ff->nLim + 1;
+  Triple sd, of;
+  sd.x = max(min(dmax,gd.x),nu);
+  sd.y = max(min(dmax,gd.y),nu);
+  sd.z = max(min(dmax,gd.z),nu);
+  of.x = max(sd.x/2, nu/2);
+  of.y = max(sd.y/2, nu/2);
+  of.z = max(sd.z/2, nu/2);
+  
+  int gdznew = gd.z + sd.z;
+  int gdynew = gd.y + sd.y;
+  int gdxnew = gd.x + sd.x;
+  
+  for (int i = 0 ; i < gdxnew ;i++) {
+    int qx = i;
+    while (qx < of.x)            qx += gd.x;
+    while (qx > gd.x - 1 + of.x) qx -= gd.x;
+    for (int j = 0 ; j < gdynew ;j++) {
+      int qy = j;
+      while (qy < of.y)            qy += gd.y;
+      while (qy > gd.y - 1 + of.y) qy -= gd.y;
+      for (int k = 0 ; k < gdznew ;k++) {
+        int qz = k;
+        while (qz < of.z)            qz += gd.z;
+        while (qz > gd.z - 1 + of.z) qz -= gd.z;
+        
+        if (i < of.x || i > of.x + gd.x - 1 ||
+            j < of.y || j > of.y + gd.y - 1 ||
+            k < of.z || k > of.z + gd.z - 1 ) {
+          int inside  = qx * gdynew * gdznew + qy * gdznew + qz;
+          int outside =  i * gdynew * gdznew +  j * gdznew + k;
+          
+          ql[outside] = ql[inside];
+        }
+      }
+    }
+  }
+  ff->time_padding[l] = msm4g_toc();
 }
 
 double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weight) {
@@ -97,19 +140,27 @@ double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weig
     F[i].x *= wt[0], F[i].y *= wt[0], F[i].z *= wt[0];
   double **q = (double **)malloc((ff->maxLevel + 1)*sizeof(double *));
   Triple gd = *(Triple *)ff->topGridDim;
-  for (int l = ff->maxLevel; l >= 2; l--){
-    q[l] = (double *)calloc(gd.x*gd.y*gd.z, sizeof(double));
-    gd.x *= 2; gd.y *= 2; gd.z *= 2;}
-  q[1] = (double *)calloc(gd.x*gd.y*gd.z, sizeof(double));
+  // no padding at the top-level
+  q[ff->maxLevel] = (double *)calloc(gd.x*gd.y*gd.z, sizeof(double));
+  for (int l = ff->maxLevel-1; l >= 1; l--){
+    gd.x *= 2; gd.y *= 2; gd.z *= 2;
+    int dmax = 2*ff->nLim + 1;
+    Triple sd = {max(min(dmax,gd.x),nu),
+                 max(min(dmax,gd.y),nu),
+                 max(min(dmax,gd.z),nu)};
+    
+    q[l] = (double *)calloc((gd.x+sd.x)*(gd.y+sd.y)*(gd.z+sd.z), sizeof(double));
+    }
   // calculate q[1]
   msm4g_tic();
   anterpolate(ff, gd, q[1], N, charge, r);
   ff->time_anterpolation = msm4g_toc();
   for (int l = 2; l <= ff->maxLevel; l++){
+    padding(ff, q[l-1], gd, l-1);
     gd.x /= 2; gd.y /= 2; gd.z /= 2;
     // calculate q[l]
     msm4g_tic();
-    restrict_(ff, gd, q[l], q[l-1]);
+    restrict_(ff, gd, q[l], q[l-1], l-1);
     ff->time_restriction[l]= msm4g_toc();
   }
   double *el = (double *)calloc(gd.x*gd.y*gd.z, sizeof(double));
@@ -142,9 +193,27 @@ double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weig
     }
   free(wt);
   // add in grid-level energy
+  int dmax = 2 * ff->nLim + 1;
+  int padx = 0, pady = 0, padz = 0;
+  if (ff->maxLevel > 1) {
+    padx = max(min(dmax,gd.x),nu);
+    pady = max(min(dmax,gd.y),nu);
+    padz = max(min(dmax,gd.z),nu);
+  }
+  int ofx = padx / 2 ;
+  int ofy = pady / 2 ;
+  int ofz = padz / 2 ;
+
   double grid_en = 0.;
-  for (int m = 0; m < gd.x*gd.y*gd.z; m++)
-    grid_en += q[1][m]*el[m];
+  for (int i = 0 ; i < gd.x; i++) {
+    for (int j = 0 ; j < gd.y; j++) {
+      for (int k = 0; k < gd.z; k++) {
+        int elidx = (i * gd.y + j) * gd.z + k;
+        int q1idx = ((i + ofx) * (gd.y + pady) + (j+ofy)) * (gd.z + padz) + (k + ofz);
+        grid_en += q[1][q1idx]*el[elidx];
+      }
+    }
+  }
   double ulong = 0.5*grid_en ;
   //printf("ulong_direct + fourier : %25.16e\n",ulong);
   
@@ -321,7 +390,19 @@ static double Bspline(FF *ff, int i, double t);
 static void anterpolate(FF *ff, Triple gd, double *q, int N, double *charge,
                         Vector *r){
   Matrix Ai = *(Matrix *)ff->Ai;
+  Triple sd = {0,0,0};
+  Triple of = {0,0,0};
   int nu = ff->orderAcc;
+  if (ff->maxLevel > 1) { // q has padding
+    int dmax = 2*ff->nLim + 1;
+    sd.x = max(min(dmax,gd.x),nu);
+    sd.y = max(min(dmax,gd.y),nu);
+    sd.z = max(min(dmax,gd.z),nu);
+    of.x = max(sd.x/2, nu/2);
+    of.y = max(sd.y/2, nu/2);
+    of.z = max(sd.z/2, nu/2);
+  }
+  
   for (int i = 0; i < N; i++){
     Vector ri = r[i];
     Vector s = prod(Ai, ri);
@@ -348,24 +429,44 @@ static void anterpolate(FF *ff, Triple gd, double *q, int N, double *charge,
           Triple m_n = {((m.x - nx) % gd.x + gd.x) % gd.x,
                         ((m.y - ny) % gd.y + gd.y) % gd.y,
                         ((m.z - nz) % gd.z + gd.z) % gd.z};
-          q[(m_n.x*gd.y + m_n.y)*gd.z + m_n.z] += charge[i]*Qi*Qj*Qk;}}}}}
+          q[((m_n.x + of.x)*(gd.y + sd.y) + (m_n.y + of.y))*(gd.z + sd.z) + m_n.z + of.z] += charge[i]*Qi*Qj*Qk;}}}}}
 
-static void restrict_(FF *ff, Triple gd, double *ql, double *qlm1){
+static void restrict_(FF *ff, Triple gd, double *ql, double *qlm1, int lm1){
   // gd are grid dimensions for ql, ql is initially zero
   // :::this can be made more efficient:::
+  int dmax = 2*ff->nLim + 1;
   int nu = ff->orderAcc;
-  int tdx = 2*gd.x, tdy = 2*gd.y, tdz = 2*gd.z;
+  Triple sd = {0,0,0};
+  Triple of = {0,0,0};
+  if (ff->maxLevel != lm1 + 1 ) { // ql has padding
+    sd.x = max(min(dmax,gd.x),nu);
+    sd.y = max(min(dmax,gd.y),nu);
+    sd.z = max(min(dmax,gd.z),nu);
+    of.x = max(sd.x/2, nu/2);
+    of.y = max(sd.y/2, nu/2);
+    of.z = max(sd.z/2, nu/2);
+  }
+  
+  int tsx = max(min(dmax,2*gd.x),nu);
+  int tsy = max(min(dmax,2*gd.y),nu);
+  int tsz = max(min(dmax,2*gd.z),nu);
+  int tdx = 2*gd.x + tsx;
+  int tdy = 2*gd.y + tsy;
+  int tdz = 2*gd.z + tsz;
+  int tox = max(tsx/2, nu/2);
+  int toy = max(tsy/2, nu/2);
+  int toz = max(tsz/2, nu/2);
   double *J = ff->J + nu/2;
   for (int mx = 0; mx < gd.x; mx++)
     for (int my = 0; my < gd.y; my++)
       for (int mz = 0; mz < gd.z; mz++){
-        int m = (mx*gd.y + my)*gd.z + mz;
+        int m = ((mx+of.x)*(gd.y + sd.y) + (my + of.y))*(gd.z + sd.z) + mz + of.z;
         for (int nx = - nu/2; nx <= nu/2; nx++){
-          int tmpnx = ((2*mx + nx) % tdx + tdx) % tdx;
+          int tmpnx = 2*mx + nx + tox;
           for (int ny = - nu/2; ny <= nu/2; ny++){
-            int tmpny = ((2*my + ny) % tdy + tdy) % tdy;
+            int tmpny = 2*my + ny + toy;
             for (int nz = - nu/2; nz <= nu/2; nz++){
-              int tmpnz = ((2*mz + nz) % tdz + tdz) % tdz;
+              int tmpnz = 2*mz + nz + toz;
               int tmpn = (tmpnx*tdy + tmpny)*tdz + tmpnz;
               ql[m] += J[nx]*J[ny]*J[nz]*qlm1[tmpn];}}}}}
 
