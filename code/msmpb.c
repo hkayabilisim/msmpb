@@ -229,7 +229,6 @@ int main(int argc, char **argv){
   printf("\"%s\" : %d,\n", "TopLevelMx",M[0]);
   printf("\"%s\" : %d,\n", "TopLevelMy",M[1]);
   printf("\"%s\" : %d,\n", "TopLevelMz",M[2]);
-  printf("\"%s\" : %.16f,\n", "beta",ff->beta);
   printf("\"%s\" : %.16e,\n", "utotal",energy);
   
   FILE *afile = fopen(accfile, "r");

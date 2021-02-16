@@ -836,7 +836,6 @@ static double kappaA(FF *ff, int l, Vector s, Vector as){
   double *tau = ff->tau;
   int nu = ff->orderAcc;
   double a_l = ff->aCut[l];
-  double beta = ff->beta;
   double rootPi = sqrt(4.*atan(1.));
 
   double pxmin = floor(s.x - a_l*as.x + 1.), pxmax = ceil(s.x + a_l*as.x - 1.);
@@ -855,16 +854,13 @@ static double kappaA(FF *ff, int l, Vector s, Vector as){
         if (rho >= 1.) continue;
         // one could instead precompute a list of Vectors (p_i, p_j, p_k)
         double gam, gam2;
-        if (l < ff->maxLevel){
-          if (rho >= 1.) gam = 1./rho;
-          else{ // gam = tau(rho^2 - 1)
-            double s = rho*rho - 1.;
-            gam = tau[nu-1];
-            for (int k = nu-2; k >= 0; k--)
-              gam = tau[k] + s*gam;}
-          gam /= a_l;}
-        else
-          gam = r != 0. ? erf(beta*r)/r : 2.*beta/rootPi;
+        if (rho >= 1.) gam = 1./rho;
+        else{ // gam = tau(rho^2 - 1)
+          double s = rho*rho - 1.;
+          gam = tau[nu-1];
+          for (int k = nu-2; k >= 0; k--)
+            gam = tau[k] + s*gam;}
+        gam /= a_l;
         rho *= 2.;
         if (rho >= 1.) gam2 = 1./rho;
         else{

@@ -32,7 +32,6 @@ typedef struct FF {
   bool FFT;
   fftw_complex *fftw_in;
   fftw_plan forward, backward;
-  double beta;
   double *tau;  // softener coefficients
   double *dsigma; // d^i sigma(1-)
   double **sigmad;
