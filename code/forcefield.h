@@ -2,6 +2,11 @@
 #include <time.h>
 #include "fftw3.h"
 
+typedef struct Vector {double x, y, z;} Vector;
+typedef struct Matrix {double xx, xy, xz, yx, yy, yz, zx, zy, zz;} Matrix;
+typedef struct Triple {int x, y, z;} Triple;
+
+
 struct O {
   char *test;
   double *khatLp1;
@@ -29,6 +34,9 @@ typedef struct FF {
   int orderAcc;
   int maxLevel;
   int topGridDim[3];
+  int *nlist;
+  int nlist_len;
+  int nlist_interaction_count;
   bool FFT;
   fftw_complex *fftw_in;
   fftw_plan forward, backward;
@@ -51,7 +59,9 @@ typedef struct FF {
   //  and those of the grid at level l 
   double coeff1, coeff2;  // coeffs of const part of energy
   double time_partcl2partcl;
+  double time_nlist;
   double time_grid2grid[10];
+  double time_stencil[10];
   double time_anterpolation;
   double time_interpolation;
   double time_restriction[10];
@@ -65,7 +75,7 @@ void FF_set_orderAcc(FF *ff, int orderAcc);
 void FF_set_maxLevel(FF *ff, int maxLevel);
 void FF_set_topGridDim(FF *ff, int topGridDim[3]);
 void FF_set_FFT(FF *ff, bool FFT);
-void FF_build(FF *ff);
+void FF_build(FF *ff, double (*position)[3]);
 int FF_get_orderAcc(FF *ff);
 int FF_get_maxLevel(FF *ff);
 void FF_get_topGridDim(FF *ff, int topGridDim[3]);
@@ -73,7 +83,7 @@ bool FF_get_FFT(FF *ff);
 double FF_get_errEst(FF *ff);
 double FF_get_estErr(FF *ff);
 void FF_set_estErr(FF *ff,double estErr);
-void FF_rebuild(FF *ff, double edges[3][3]);
+void FF_rebuild(FF *ff, double edges[3][3], double (*position)[3]);
 double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weight);
   // if weights == NULL, unit weights are assumed; otherwise
   // weights should point to an array of length FF_get_maxLevel(ff) + 1
@@ -84,6 +94,9 @@ double msm4g_tictocmanager(int push) ;
 void msm4g_tic(void);
 double msm4g_toc(void);
 
+double invert(Matrix *A);
+void omegap(FF *ff);
+
 #define max(a,b) \
 ({ __typeof__ (a) _a = (a); \
   __typeof__ (b) _b = (b); \
@@ -93,3 +106,8 @@ double msm4g_toc(void);
 ({ __typeof__ (a) _a = (a); \
   __typeof__ (b) _b = (b); \
   _a > _b ? _b : _a; })
+
+Vector prod(Matrix m, Vector v);
+Vector prodT(Matrix m, Vector v);
+
+double _FF_get_errEst(FF *ff,int nu);

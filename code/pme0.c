@@ -17,12 +17,142 @@
 #include "fftw3.h"
 #include "pme.h"
 
-typedef struct Vector {double x, y, z;} Vector;
-typedef struct Matrix {double xx, xy, xz, yx, yy, yz, zx, zy, zz;} Matrix;
-typedef struct Triple {int x, y, z;} Triple;
+void neighborlist(FF *ff, int N, Vector *position){
+  int interaction_count = 0;
+  Matrix A = *(Matrix *)ff->A;
+  Matrix Ai = *(Matrix *)ff->Ai;
+  double a_0 = ff->cutoff;
+  double a_02 = a_0 * a_0;
+  Vector as = {sqrt(Ai.xx*Ai.xx + Ai.yx*Ai.yx + Ai.zx*Ai.zx),
+    sqrt(Ai.xy*Ai.xy + Ai.yy*Ai.yy + Ai.zy*Ai.zy),
+    sqrt(Ai.xz*Ai.xz + Ai.yz*Ai.yz + Ai.zz*Ai.zz)};
+  double pi = 4.*atan(1.);
+  int nlist_idx = 0;
+  int nlist_len = 3*N + 2.1 * ((4.0/3.0)*pi*a_0*a_0*a_0*0.5*N*(N-1.0)/ff->detA);
+  ff->nlist_len = nlist_len;
+  int *nlist = (int *) calloc(nlist_len, sizeof(int));
+  ff->nlist = nlist;
+  ff->nlist_len = nlist_len;
+  
+  // create hash table
+  Triple gd = {ceil(pow(N,1./3.)),ceil(pow(N,1./3.)),ceil(pow(N,1./3.))};
+  int gd_prod = gd.x*gd.y*gd.z;
+  int *first = (int *)malloc(gd_prod*sizeof(int));
+  for (int m = 0; m < gd_prod; m++) first[m] = -1;
+  int *next = (int *)malloc(N*sizeof(int));
+  for (int i = 0; i < N; i++){
+    Vector ri = position[i];
+    Vector s = prod(Ai, ri);
+    s.x = s.x - floor(s.x);
+    s.y = s.y - floor(s.y);
+    s.z = s.z - floor(s.z);
+    Vector t = {(double)gd.x*s.x, (double)gd.y*s.y, (double)gd.z*s.z};
+    // Triple m = {(int)floor(t.x), (int)floor(t.y), (int)floor(t.z)};
+    Triple m = {(int)t.x, (int)t.y, (int)t.z};
+    int m_ = (m.x*gd.y + m.y)*gd.z + m.z;
+    next[i] = first[m_];
+    first[m_] = i;
+  }
+  // compute ranges - can be part of preprocessing
+  // compute diameter of a grid cell
+  Vector HAx = {A.xx/(double)gd.x, A.yx/(double)gd.y, A.zx/(double)gd.z};
+  Vector HAy = {A.xy/(double)gd.x, A.yy/(double)gd.y, A.zy/(double)gd.z};
+  Vector HAz = {A.xz/(double)gd.x, A.yz/(double)gd.y, A.zz/(double)gd.z};
+  double off_yz = HAy.x*HAz.x + HAy.y*HAz.y + HAy.z*HAz.z;
+  double off_zx = HAz.x*HAx.x + HAz.y*HAx.y + HAz.z*HAx.z;
+  double off_xy = HAx.x*HAy.x + HAx.y*HAy.y + HAx.z*HAy.z;
+  if (off_yz * off_zx * off_xy < 0){
+    if (fabs(off_yz) < fabs(off_zx) && fabs(off_yz) < fabs(off_xy))
+      off_yz *= -1.;
+    else if (fabs(off_zx) < fabs(off_xy))
+      off_zx *= -1.;
+    else
+      off_xy *= -1.;}
+  Vector t = {copysign(1., off_yz), copysign(1., off_zx),copysign(1., off_xy)};
+  Vector At = prod(A, t);
+  Vector HAt = {At.x/(double)gd.x, At.y/(double)gd.y, At.z/(double)gd.z};
+  double diam = sqrt(HAt.x*HAt.x + HAt.y*HAt.y + HAt.z*HAt.z);
+  int nxlim = (int)ceil(as.x*(double)gd.x*a_0);
+  int nylim = (int)ceil(as.y*(double)gd.y*a_0);
+  int nzlim = (int)ceil(as.z*(double)gd.z*a_0);
+  
+  int nxd = 2*nxlim + 1 < gd.x ? 2*nxlim + 1 : gd.x;
+  int nyd = 2*nylim + 1 < gd.y ? 2*nylim + 1 : gd.y;
+  int nzd = 2*nzlim + 1 < gd.z ? 2*nzlim + 1 : gd.z;
+  // compute cell neighbor lists - can be part of preprocessing
+  int ndim = nxd*nyd*nzd;
+  Triple *n = (Triple *)calloc(ndim, sizeof(Triple));
+  int k = 0; // number of occupied elements of n;
+  for (int nx = -nxd/2; nx < (nxd + 1)/2; nx++)
+    for (int ny = -nyd/2; ny < (nyd + 1)/2; ny++)
+      for (int nz = -nzd/2; nz < (nzd + 1)/2; nz++){
+        Vector s = {(double)nx/(double)gd.x,
+          (double)ny/(double)gd.y, (double)nz/(double)gd.z};
+        Vector r = prod(A, s);
+        double normr = sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
+        if (normr - diam < a_0){
+          Triple nk = {nx, ny, nz};
+          n[k] = nk;
+          k++;}
+      }
+  int kcnt = k;
+  // compute interactions
+  int m = 0;  // index of grid cell 1
+  int i = -1;  // particle number
+  while (true){  // loop over i
+    if (i >= 0) i = next[i];
+    else i = first[m];
+    while (i < 0 && m + 1 < gd_prod){m++; i = first[m];}
+    //### loop exit ###
+    if (i < 0) break;
+    int mx = m/(gd.y*gd.z);
+    int my = (m - mx*gd.y*gd.z)/gd.z;
+    int mz = m - (mx*gd.y + my)*gd.z;
+    Vector ri = position[i];
+    nlist[nlist_idx++] = i;
+    int k = 0; // index of next neighbor triple for j
+    int j = i;
+    while (true){  // loop over j
+      j = next[j];
+      while (j < 0 && k < kcnt){
+        int mpnx = (mx + n[k].x + gd.x)%gd.x;
+        int mpny = (my + n[k].y + gd.y)%gd.y;
+        int mpnz = (mz + n[k].z + gd.z)%gd.z;
+        int mpn = (mpnx*gd.y + mpny)*gd.z + mpnz;
+        if (mpn > m) j = first[mpn];
+        k++;}
+      //### loop exit ###
+      if (j < 0) break;
+      // compute interaction
+      Vector rj = position[j];
+      Vector r = {rj.x - ri.x, rj.y - ri.y, rj.z - ri.z};
+      // convert to nearest image
+      Vector s = prod(Ai, r);
+      Vector p = {floor(s.x + 0.5), floor(s.y + 0.5), floor(s.z + 0.5)};
+      Vector Ap = prod(A, p);
+      r.x -= Ap.x; r.y -= Ap.y; r.z -= Ap.z;
+      double distance2 = r.x*r.x + r.y*r.y + r.z*r.z;
+      if (distance2 < a_02) {
+        interaction_count++;
+        nlist[nlist_idx++] = j;
+      }
+    }
+    nlist[nlist_idx++] = -1;
+  }
+  nlist[nlist_idx++] = -1;
+  free(n);
+  free(first);
+  free(next);
+  ff->nlist_interaction_count = interaction_count;
+}
 
-FF *FF_new(void){
+FF *FF_new(int N, double *q, double edges[3][3]){
   FF *ff = (FF *)calloc(1, sizeof(FF));
+  ff->N = N;
+  ff->q = q;
+  for (int i = 0 ; i < 3; i++)
+    for (int j = 0 ; j < 3; j++)
+      ff->A[i][j] = edges[i][j];
   return ff;}
 
 // for each computational parameter
@@ -44,13 +174,16 @@ void FF_set_tolDir(FF *ff, double tolDir){
 // helper functions:
 static double invert(Matrix *A);
 static void omegap(FF *ff);
-void FF_build(FF *ff, int N, double edges[3][3]){
-  // N: number of particles
-  // edges: columns are vectors defining parallelpiped
-  ff->N = N;
-  Matrix Ai = *(Matrix *)edges;
-  double detA = invert(&Ai);
-  ff->detA = detA;
+void FF_build(FF *ff, double (*position)[3]){
+  int N = ff->N;
+  for (int i = 0 ; i < 3; i++)
+    for (int j = 0 ; j < 3; j++)
+      ff->Ai[i][j] = ff->A[i][j];
+  Matrix A = *(Matrix *)ff->A;
+  Matrix Ai = *(Matrix *)ff->Ai;
+  
+  ff->detA = invert(&Ai);
+  *(Matrix *)ff->Ai = Ai;
 
   // set default values for unspecified method parameters
   if (! ff->cutoff) ff->cutoff = 8.;
@@ -62,7 +195,7 @@ void FF_build(FF *ff, int N, double edges[3][3]){
   // erfc(beta a_0)/a_0 = ff->tolDir/h_0  % EPBD05 omit 1/h_star
   double a_0 = ff->cutoff;
   double pi = 4.*atan(1.);
-  double hstar = pow(detA/(double)N, 1./3.);
+  double hstar = pow(ff->detA/(double)N, 1./3.);
 	double const_ = ff->tolDir*a_0/hstar;
   double beta = 0.; // beta = beta*a_0 until after iteration
   double res = erfc(beta) - const_;
@@ -106,13 +239,13 @@ void FF_build(FF *ff, int N, double edges[3][3]){
 		beta = ff->beta;
 		double h = pow(ff->tolDir/tolDir_ref, 1./(double)ff->orderAcc)
 			*(beta_ref/beta)*h_ref;
-		Matrix A = *(Matrix *)edges;
 		double ax = sqrt(A.xx*A.xx + A.xy*A.xy + A.xz*A.xz);
 		double ay = sqrt(A.yx*A.yx + A.yy*A.yy + A.yz*A.yz);
 		double az = sqrt(A.zx*A.zx + A.zy*A.zy + A.zz*A.zz);
     ff->topGridDim[0] = (int)ceil(ax/h);
     ff->topGridDim[1] = (int)ceil(ay/h);
-    ff->topGridDim[2] = (int)ceil(az/h);}
+    ff->topGridDim[2] = (int)ceil(az/h);
+  }
   
   // build first ord/2 pieces of B-splines Q_ord(t)
   // piece_i(t) = q_i0 + q_i1*(t - i) + ... + q_{i,ord-1}*(t - i)^{ord-1}
@@ -163,7 +296,12 @@ void FF_build(FF *ff, int N, double edges[3][3]){
                                 FFTW_BACKWARD, FFTW_ESTIMATE);
 
   // compute stencil ff->khat
-  FF_rebuild(ff, edges);
+  Vector *r = (Vector *)position;
+  msm4g_tic();
+  neighborlist(ff, N, r);
+  ff->time_nlist = msm4g_toc();
+  
+  FF_rebuild(ff, ff->A, position);
 }
 
 // for each computational parameter
@@ -209,9 +347,10 @@ double FF_get_errEst(FF *ff, int N, double *charge){
 // It initializes edges and calculate the grid2grid stencils.
 // helper functions:
 static void dALp1(FF *ff, Triple gd, double kh[], double detA);
-void FF_rebuild(FF *ff, double edges[3][3]) {
+void FF_rebuild(FF *ff, double edges[3][3], double (*r)[3]) {
   *(Matrix *)ff->A = *(Matrix *)edges;
   Matrix A = *(Matrix *)ff->A;
+  
   // calculate coeffs for const part of energy
   int nu = ff->orderAcc;
   double a_0 = ff->cutoff;
@@ -252,7 +391,9 @@ void FF_rebuild(FF *ff, double edges[3][3]) {
   double *kh = ff->khat;
   // add in d^2(A)
   // d^2(A)_n = sum_k chi(k) c'(k) exp(2 pi i k . H_L n)
+  msm4g_tic();
   dALp1(ff, gd, kh, detA);
+  ff->time_stencil = msm4g_toc();
 }
 
 void FF_delete(FF *ff) {
@@ -262,6 +403,7 @@ void FF_delete(FF *ff) {
   fftw_destroy_plan(ff->forward);
   fftw_destroy_plan(ff->backward);
   fftw_free(ff->fftw_in);
+  free(ff->nlist);
   free(ff);
 }
 

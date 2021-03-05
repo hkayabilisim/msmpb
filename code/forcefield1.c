@@ -13,9 +13,9 @@
 #include <string.h>
 #include "forcefield.h"
 
-typedef struct Vector {double x, y, z;} Vector;
-typedef struct Matrix {double xx, xy, xz, yx, yy, yz, zx, zy, zz;} Matrix;
-typedef struct Triple {int x, y, z;} Triple;
+
+
+static void neighborlist(FF *ff, int N, Vector *position);
 
 // particles are not assumed to be in periodic cell.
 // helper functions
@@ -32,7 +32,6 @@ static void FFTg2g(FF *ff, Triple gd, double *el, double *ql, double *kh);
 static void DFTg2g(Triple gd, double *el, double *ql, double *kh);
 static void interpolate(FF *ff, int N, Vector *E, Vector *r, Triple gd,
                           double *el);
-
 double msm4g_tictocmanager(int push) {
   double elapsed_seconds = 0.0;
   static clock_t stack_data[100] ;
@@ -105,7 +104,7 @@ double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weig
   double *charge = ff->q;
   int nu = ff->orderAcc;
   int N = ff->N;
-    Vector *r = (Vector *)position;
+  Vector *r = (Vector *)position;
   Vector *F = (Vector *)force;
   double *wt = (double *)malloc((ff->maxLevel + 1)*sizeof(double));
   for (int l = 0; l <= ff->maxLevel; l++)
@@ -134,7 +133,7 @@ double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weig
   msm4g_tic();
   double ushort_real = partcl2partcl(ff, N, F, r, charge) ;
   ff->time_partcl2partcl = msm4g_toc();
-	//printf("ushort_real : %25.16f\n",ushort_real);
+  //printf("ushort_real : %25.16f\n",ushort_real);
   energy += wt[0]*ushort_real;
   for (int i = 0; i < N; i++)
     F[i].x *= wt[0], F[i].y *= wt[0], F[i].z *= wt[0];
@@ -235,16 +234,17 @@ double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weig
   return energy;
 }
 
-static Vector prod(Matrix m, Vector v);
-static Vector prodT(Matrix m, Vector v);
+
+
+
 static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
                             double *charge){
-  // return particle-level energy, calculate forces
-  Matrix A = *(Matrix *)ff->A;
-  Matrix Ai = *(Matrix *)ff->Ai;
+  double energy = 0.0;
   int nu = ff->orderAcc;
   double a_0 = ff->aCut[0];
-  double energy = 0.;
+  double a_02 = a_0 * a_0 ;
+  Matrix A = *(Matrix *)ff->A;
+  Matrix Ai = *(Matrix *)ff->Ai;
   for (int i = 0; i < N; i++) force[i].z = force[i].y = force[i].x = 0.;
   Vector as = {sqrt(Ai.xx*Ai.xx + Ai.yx*Ai.yx + Ai.zx*Ai.zx),
                sqrt(Ai.xy*Ai.xy + Ai.yy*Ai.yy + Ai.zy*Ai.zy),
@@ -252,97 +252,16 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
   double pxlim = ceil(a_0*as.x - 0.5);
   double pylim = ceil(a_0*as.y - 0.5);
   double pzlim = ceil(a_0*as.z - 0.5);
-  // create hash table
-  Triple gd = *(Triple *)ff->topGridDim;
-  for (int l = ff->maxLevel; l >= 2; l--)
-    gd.x *= 2, gd.y *= 2, gd.z *= 2;
-  int gd_prod = gd.x*gd.y*gd.z;
-  int *first = (int *)malloc(gd_prod*sizeof(int));
-  for (int m = 0; m < gd_prod; m++) first[m] = -1;
-  int *next = (int *)malloc(N*sizeof(int));
-  for (int i = 0; i < N; i++){
+ 
+  
+  int *nlist = ff->nlist;
+  int ptr = 0;
+  int i = nlist[ptr++];
+  int int_list = 0;
+  while (i != -1) {
     Vector ri = position[i];
-    Vector s = prod(Ai, ri);
-    s.x = s.x - floor(s.x);
-    s.y = s.y - floor(s.y);
-    s.z = s.z - floor(s.z);
-    Vector t = {(double)gd.x*s.x, (double)gd.y*s.y, (double)gd.z*s.z};
-    // Triple m = {(int)floor(t.x), (int)floor(t.y), (int)floor(t.z)};
-    Triple m = {(int)t.x, (int)t.y, (int)t.z};
-    int m_ = (m.x*gd.y + m.y)*gd.z + m.z;
-    next[i] = first[m_];
-    first[m_] = i;
-  }
-  // compute ranges - can be part of preprocessing
-  // compute diameter of a grid cell
-	Vector HAx = {A.xx/(double)gd.x, A.yx/(double)gd.y, A.zx/(double)gd.z};
-	Vector HAy = {A.xy/(double)gd.x, A.yy/(double)gd.y, A.zy/(double)gd.z};
-	Vector HAz = {A.xz/(double)gd.x, A.yz/(double)gd.y, A.zz/(double)gd.z};
-	double off_yz = HAy.x*HAz.x + HAy.y*HAz.y + HAy.z*HAz.z;
-	double off_zx = HAz.x*HAx.x + HAz.y*HAx.y + HAz.z*HAx.z;
-	double off_xy = HAx.x*HAy.x + HAx.y*HAy.y + HAx.z*HAy.z;
-	if (off_yz * off_zx * off_xy < 0){
-		if (fabs(off_yz) < fabs(off_zx) && fabs(off_yz) < fabs(off_xy))
-			off_yz *= -1.;
-		else if (fabs(off_zx) < fabs(off_xy))
-			off_zx *= -1.;
-		else
-			off_xy *= -1.;}
-	Vector t = {copysign(1., off_yz), copysign(1., off_zx),copysign(1., off_xy)};
-	Vector At = prod(A, t);
-	Vector HAt = {At.x/(double)gd.x, At.y/(double)gd.y, At.z/(double)gd.z};
-	double diam = sqrt(HAt.x*HAt.x + HAt.y*HAt.y + HAt.z*HAt.z);
-  int nxlim = (int)ceil(as.x*(double)gd.x*a_0);
-  int nylim = (int)ceil(as.y*(double)gd.y*a_0);
-  int nzlim = (int)ceil(as.z*(double)gd.z*a_0);
-
-  int nxd = 2*nxlim + 1 < gd.x ? 2*nxlim + 1 : gd.x;
-  int nyd = 2*nylim + 1 < gd.y ? 2*nylim + 1 : gd.y;
-  int nzd = 2*nzlim + 1 < gd.z ? 2*nzlim + 1 : gd.z;
-  // compute cell neighbor lists - can be part of preprocessing
-  int ndim = nxd*nyd*nzd;
-  Triple *n = (Triple *)calloc(ndim, sizeof(Triple));
-  int k = 0; // number of occupied elements of n;
-  for (int nx = -nxd/2; nx < (nxd + 1)/2; nx++)
-    for (int ny = -nyd/2; ny < (nyd + 1)/2; ny++)
-      for (int nz = -nzd/2; nz < (nzd + 1)/2; nz++){
-        Vector s = {(double)nx/(double)gd.x,
-                    (double)ny/(double)gd.y, (double)nz/(double)gd.z};
-        Vector r = prod(A, s);
-        double normr = sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
-        if (normr - diam < a_0){
-          Triple nk = {nx, ny, nz};
-          n[k] = nk;
-          k++;}
-      }
-  int kcnt = k;
-  // compute interactions
-  int m = 0;  // index of grid cell 1
-  int i = -1;  // particle number
-  while (true){  // loop over i
-    if (i >= 0) i = next[i];
-    else i = first[m];
-    while (i < 0 && m + 1 < gd_prod){m++; i = first[m];}
-    //### loop exit ###
-    if (i < 0) break;
-    int mx = m/(gd.y*gd.z);
-    int my = (m - mx*gd.y*gd.z)/gd.z;
-    int mz = m - (mx*gd.y + my)*gd.z;
-    Vector ri = position[i];
-    int k = 0; // index of next neighbor triple for j
-    int j = i;
-    while (true){  // loop over j
-      j = next[j];
-      while (j < 0 && k < kcnt){
-        int mpnx = (mx + n[k].x + gd.x)%gd.x;
-        int mpny = (my + n[k].y + gd.y)%gd.y;
-        int mpnz = (mz + n[k].z + gd.z)%gd.z;
-        int mpn = (mpnx*gd.y + mpny)*gd.z + mpnz;
-        if (mpn > m) j = first[mpn];
-        k++;}
-      //### loop exit ###
-      if (j < 0) break;
-      // compute interaction
+    int j = nlist[ptr++];
+    while ( j != -1 ) {
       Vector rj = position[j];
       Vector r = {rj.x - ri.x, rj.y - ri.y, rj.z - ri.z};
       // convert to nearest image
@@ -353,6 +272,7 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
       Vector r0 = r;
       double sum = 0.;
       Vector F = {0., 0., 0.};
+      int pcount = 0;
       for (p.x = - pxlim; p.x <= pxlim; p.x++)
         for (p.y = - pylim; p.y <= pylim; p.y++)
           for (p.z = - pzlim; p.z <= pzlim; p.z++){
@@ -360,6 +280,7 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
             r.x = r0.x + Ap.x; r.y = r0.y + Ap.y; r.z = r0.z + Ap.z;
             double r2 = r.x*r.x + r.y*r.y + r.z*r.z;
             if (r2 < a_0*a_0){
+              pcount++;
               double s = r2/(a_0*a_0) - 1.;
               // add V(|r|) = 1/|r| - tau(s)/a_0 to sum
               // F on particle i = V'(|r|)r/|r|
@@ -372,18 +293,21 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
               sum += 1./sqrt(r2) - taus/a_0;
               double coeff = -1./(r2*sqrt(r2)) - 2.*tau1s/pow(a_0, 3);
               F.x += coeff*r.x, F.y += coeff*r.y, F.z += coeff*r.z;}}
+      
       energy += charge[i]*charge[j]*sum;
       F.x *= charge[i]*charge[j];
       F.y *= charge[i]*charge[j];
       F.z *= charge[i]*charge[j];
       force[i].x += F.x, force[i].y += F.y,force[i].z += F.z;
       force[j].x -= F.x, force[j].y -= F.y,force[j].z -= F.z;
-      // end compute interaction
-    } // end loop over j
-  } // end loop over i
-  free(n);
-  free(first);
-  free(next);
+
+
+      j = nlist[ptr++];
+      if (pcount > 0) int_list++;
+    }
+    i = nlist[ptr++];
+  }
+  //printf("int_list : %d\n",int_list);
   return energy;}
 
 static double Bspline(FF *ff, int i, double t);
@@ -594,13 +518,13 @@ static double Bspline1(double *Qi1t, FF *ff, int i, double t){
   *Qi1t *= sign;
   return Qit;}
 
-static Vector prod(Matrix M, Vector v){
+Vector prod(Matrix M, Vector v){
   Vector Mx = {M.xx*v.x + M.xy*v.y + M.xz*v.z,
                M.yx*v.x + M.yy*v.y + M.yz*v.z,
                M.zx*v.x + M.zy*v.y + M.zz*v.z};
   return Mx;}
 
-static Vector prodT(Matrix M, Vector v){
+Vector prodT(Matrix M, Vector v){
   Vector MTx = {M.xx*v.x + M.yx*v.y + M.zx*v.z,
                 M.xy*v.x + M.yy*v.y + M.zy*v.z,
                 M.xz*v.x + M.yz*v.y + M.zz*v.z};

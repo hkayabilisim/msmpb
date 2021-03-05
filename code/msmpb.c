@@ -18,9 +18,15 @@ void usage() {
           "[--repl replx reply replz]\n"
           "[--ntc numberOfTaylorTerms]\n"
           "[--tmax tmax]\n"
-          "[--edge a11 a12 a13 a21 a22 a23 a31 a32 a33]\n");
+          "[--edge a11 a12 a13 a21 a22 a23 a31 a32 a33]\n"
+          "[--bincoor file]\n"
+          "[--potfile .pot file]\n"
+          "[--accfile .acc file]\n");
   exit(1);
 }
+
+int read_binary_coordinate_file(const char *fname, int natoms, double *xyz);
+
 int main(int argc, char **argv){
   if (argc == 1) {
     usage();
@@ -36,17 +42,21 @@ int main(int argc, char **argv){
   double (*acc)[3];
   double *q;
   double *mass;
-  char inifile[100],accfile[100],potfile[100] ;
+  char inifile[200],accfile[200],potfile[200],bincoorfile[200];
   double perturbx = 0.0;
   double perturby = 0.0;
   double perturbz = 0.0;
   int ntc = 7;
   int tmax = 4;
   bool perturb = false;
-  
+  bool readbincoor = false;
   int replx = 1; int reply = 1; int replz = 1;
   double a0 = -1;
   int nu = -1,L=-1,Mtop=-1;
+  sprintf(inifile,"%s.ini",argv[1]);
+  sprintf(accfile,"%s.acc",argv[1]);
+  sprintf(potfile,"%s.pot",argv[1]);
+  
   for (int i = 0 ; i < argc ;i++) {
     if (strcmp(argv[i],"--a0") == 0) {
       a0 = atof(argv[i+1]);
@@ -78,12 +88,17 @@ int main(int argc, char **argv){
       edge_in[2][1] = atof(argv[i+8]);
       edge_in[2][2] = atof(argv[i+9]);
       edge_given = true;
+    } else if (strcmp(argv[i],"--potfile") == 0)  {
+      sprintf(potfile,"%s",argv[i+1]);
+    } else if (strcmp(argv[i],"--accfile") == 0)  {
+      sprintf(accfile,"%s",argv[i+1]);
+    } else if (strcmp(argv[i],"--bincoor") == 0)  {
+      sprintf(bincoorfile,"%s",argv[i+1]);
+      readbincoor = true;
     }
   }
 
-  sprintf(inifile,"%s.ini",argv[1]);
-  sprintf(accfile,"%s.acc",argv[1]);
-  sprintf(potfile,"%s.pot",argv[1]);
+
   FILE *ifile = fopen(inifile, "r");
   
   // read it in by line number and character position
@@ -110,6 +125,15 @@ int main(int argc, char **argv){
       sscanf(line, "%lf%lf%lf%lf%lf", &q[i], r[i], r[i]+1, r[i]+2,&mass[i]);
   }
   fclose(ifile);
+  
+  if (readbincoor) {
+    int errcode = read_binary_coordinate_file(bincoorfile, N, (double *) r);
+    if (errcode != 0) {
+      fprintf(stderr, "Failed to read binary coordinate file \"%s\"\n",
+              bincoorfile);
+      exit(1);
+    }
+  }
   
   // Replication
   int m = N ;
@@ -160,25 +184,28 @@ int main(int argc, char **argv){
   ff->ntc = ntc;
   ff->tmax = tmax;
   msm4g_tic();
-  FF_build(ff);
+  FF_build(ff,r);
   double time_build = msm4g_toc();
   
   msm4g_tic();
   energy = FF_energy(ff, F, r, NULL);
   double time_energy = msm4g_toc();
-  FF_get_topGridDim(ff,M);
+  FF_get_topGridDim(ff, M);
   
   double time_manual_sum = 0;
   printf("{\n");
   printf("\"%s\" : %10.8f,\n","time_partcl2partcl",ff->time_partcl2partcl);
-  time_manual_sum += ff->time_partcl2partcl;
+  printf("\"%s\" : %10.8f,\n","time_nlist",ff->time_nlist);
+  time_manual_sum += ff->time_partcl2partcl + ff->time_nlist;
   //double time_grid2grid_total = 0;
   for (int l = 1 ; l <= ff->maxLevel ; l++) {
     //time_grid2grid_total += ff->time_grid2grid[l];
     printf("\"time_grid2grid_atlevel%d\"        : %10.8f,\n",l,ff->time_grid2grid[l]);
     printf("\"time_padding_atlevel%d\"          : %10.8f,\n",l,ff->time_padding[l]);
+    printf("\"time_stencil_atlevel%d\"          : %10.8f,\n",l,ff->time_stencil[l]);
     time_manual_sum += ff->time_grid2grid[l];
     time_manual_sum += ff->time_padding[l];
+    time_manual_sum += ff->time_stencil[l];
   }
   //printf("%-30s : %10.8f\n","time_grid2grid_total",time_grid2grid_total);
   //double time_restriction_total = 0;
@@ -202,10 +229,9 @@ int main(int argc, char **argv){
   printf("\"%s\" : %10.8f,\n","time_anterpolation",ff->time_anterpolation);
   printf("\"%s\" : %10.8f,\n","time_interpolation",ff->time_interpolation);
   time_manual_sum += ff->time_anterpolation + ff->time_interpolation;
-  time_manual_sum += time_build;
 
   printf("\"%s\" : %10.8f,\n","time_build",time_build);
-  //printf("%-30s : %10.8f\n","time_energy",time_energy);
+  printf("\"%s\" : %10.8f,\n","time_energy",time_energy);
   printf("\"%s\" : %10.8f,\n","time_other",time_build+time_energy-time_manual_sum);
   printf("\"%s\" : %10.8f,\n","time_total",time_build+time_energy);
   printf("\"%s\" : \"%s\",\n", "data",argv[1]);
@@ -218,6 +244,8 @@ int main(int argc, char **argv){
   printf("\"%s\" : %-10.5f,\n","Perturbationz",perturbz);
   printf("\"%s\" : %d,\n", "nu",FF_get_orderAcc(ff));
   printf("\"%s\" : %d,\n", "ntc",ff->ntc);
+  printf("\"%s\" : %d,\n", "nlist_len",ff->nlist_len);
+  printf("\"%s\" : %d,\n", "nlist_interaction_count",ff->nlist_interaction_count);
   printf("\"%s\" : %d,\n", "tmax",ff->tmax);
   printf("\"%s\" : %f,\n", "cutoff",FF_get_cutoff(ff));
   printf("\"%s\" : [%5.2f, %5.2f, %5.2f],\n", "Edge row1",
@@ -251,6 +279,7 @@ int main(int argc, char **argv){
     double Q2 = 0.0;
     for (int i = 0; i < N; i++) Q2 += q[i]*q[i];
     double Fref = (Q2/(double)N)/pow(ff->detA/(double)N, 2./3.);
+    double Uref = (Q2/(double)N)/pow(ff->detA/(double)N, 1./3.);
     double max_acc = 0.;
     double max_acc_err = 0.;
     double rms_top = 0.0;
@@ -286,6 +315,7 @@ int main(int argc, char **argv){
     printf("\"%s\" : %25.16e,\n", "deltaFest",FF_get_deltaF(ff));
     printf("\"%s\" : %25.16e,\n", "deltaFest/Fref",FF_get_errEst(ff));
     printf("\"%s\" : %25.16e,\n", "fref",Fref);
+    printf("\"%s\" : %25.16e,\n", "uref",Uref);
     printf("\"%s\" : %25.16e,\n", "Q2",Q2);
   }
   
@@ -298,7 +328,7 @@ int main(int argc, char **argv){
       sscanf(line,"%lf", &energy_expected);
     energy_expected *= replx * reply * replz;
     printf("\"%s\" : %25.16e,\n", "poterror",fabs(energy_expected-energy)/fabs(energy_expected));
-    printf("\"%s\" : %25.16f\n", "potabserror",energy-energy_expected);
+    printf("\"%s\" : %25.16f\n", "potabserror",fabs(energy-energy_expected));
     fclose(pfile);
   }
   printf("}");
@@ -321,4 +351,39 @@ int main(int argc, char **argv){
   free(q);
   free(mass);
   
+}
+
+/*
+ * Read NAMD binary coordinate file.
+ * Provide file name (full path to file), number of atoms N, and preallocated
+ * array buffer space for 3N coordinates stored in x/y/z form.
+ */
+int read_binary_coordinate_file(const char *fname, int natoms, double *xyz)
+{
+  FILE *file = NULL;
+  int n = 0;
+  if ((file=fopen(fname, "rb")) == NULL) {
+    fprintf(stderr, "Unable to open file \"%s\" for reading\n", fname);
+    return -1;
+  }
+  else if (fread(&n, sizeof(int), 1, file) != 1) {
+    fprintf(stderr, "Unable to read number of atoms from file \"%s\"\n", fname);
+    return -1;
+  }
+  else if (n != natoms) {
+    fprintf(stderr,
+            "Expecting %d atoms in file \"%s\" but says it contains %d atoms\n",
+            natoms, fname, n);
+    return -1;
+  }
+  else if (fread(xyz, sizeof(double), 3*n, file) != 3*n) {
+    fprintf(stderr, "Unable to read %d atom coordinates from file \"%s\"\n",
+            n, fname);
+    return -1;
+  }
+  else if (fclose(file) != 0) {
+    fprintf(stderr, "Unable to close file \"%s\" after reading\n", fname);
+    return -1;
+  }
+  return 0;
 }
