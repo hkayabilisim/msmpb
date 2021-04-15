@@ -6,7 +6,6 @@ typedef struct Vector {double x, y, z;} Vector;
 typedef struct Matrix {double xx, xy, xz, yx, yy, yz, zx, zy, zz;} Matrix;
 typedef struct Triple {int x, y, z;} Triple;
 
-
 struct O {
   char *test;
   double *khatLp1;

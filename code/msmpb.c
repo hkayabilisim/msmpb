@@ -232,6 +232,7 @@ int main(int argc, char **argv){
 
   printf("\"%s\" : %10.8f,\n","time_build",time_build);
   printf("\"%s\" : %10.8f,\n","time_energy",time_energy);
+  printf("\"%s\" : %10.8f,\n","time_longrange",time_energy - ff->time_partcl2partcl);
   printf("\"%s\" : %10.8f,\n","time_other",time_build+time_energy-time_manual_sum);
   printf("\"%s\" : %10.8f,\n","time_total",time_build+time_energy);
   printf("\"%s\" : \"%s\",\n", "data",argv[1]);
@@ -319,6 +320,40 @@ int main(int argc, char **argv){
     printf("\"%s\" : %25.16e,\n", "Q2",Q2);
   }
   
+
+
+  double uintra = 0.0;
+  for (int i = 0 ; i < N ; i += 3) {
+    double *rO = r[i];
+    double *rHa = r[i+1];
+    double *rHb = r[i+2];
+    double distance_OHa = sqrt( (rO[0] - rHa[0]) * (rO[0] - rHa[0])
+                          + (rO[1] - rHa[1]) * (rO[1] - rHa[1])
+                          + (rO[2] - rHa[2]) * (rO[2] - rHa[2]) );
+    double distance_OHb = sqrt( (rO[0] - rHb[0]) * (rO[0] - rHb[0])
+                          + (rO[1] - rHb[1]) * (rO[1] - rHb[1])
+                          + (rO[2] - rHb[2]) * (rO[2] - rHb[2]) );
+    double distance_HH = sqrt( (rHa[0] - rHb[0]) * (rHa[0] - rHb[0])
+                           + (rHa[1] - rHb[1]) * (rHa[1] - rHb[1])
+                           + (rHa[2] - rHb[2]) * (rHa[2] - rHb[2]) );
+    double q_O = q[i];
+    double q_Ha = q[i+1];
+    double q_Hb = q[i+2];
+    double energy_OHa = q_O * q_Ha / distance_OHa;
+    double energy_OHb = q_O * q_Hb / distance_OHb;
+    double energy_HH = q_Ha * q_Hb / distance_HH;
+
+    double delta = energy_OHa + energy_OHb + energy_HH;
+    uintra += delta;
+  }
+
+  /*
+   * Value namd_energy is set to electrostatic potential
+   * needs to be converted from kcal/mol to charge^2/distance.
+   */
+  printf("\"%s\" : %25.16e,\n", "uintra",uintra);
+  printf("\"%s\" : %25.16e,\n", "utotal_kcal_mol",332.0636*(energy-uintra));
+
   
   FILE *pfile = fopen(potfile, "r");
   

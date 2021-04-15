@@ -138,9 +138,15 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
       Vector rj = position[j];
       Vector r = {rj.x - ri.x, rj.y - ri.y, rj.z - ri.z};
       // convert to nearest image
-      Vector s = prod(Ai, r);
+      //Vector s = prod(Ai, r);
+      Vector s = {Ai.xx*r.x + Ai.xy*r.y + Ai.xz*r.z,
+                  Ai.yx*r.x + Ai.yy*r.y + Ai.yz*r.z,
+                  Ai.zx*r.x + Ai.zy*r.y + Ai.zz*r.z};
       Vector p = {floor(s.x + 0.5), floor(s.y + 0.5), floor(s.z + 0.5)};
-      Vector Ap = prod(A, p);
+      //Vector Ap = prod(A, p);
+      Vector Ap ={A.xx*p.x + A.xy*p.y + A.xz*p.z,
+                  A.yx*p.x + A.yy*p.y + A.yz*p.z,
+                  A.zx*p.x + A.zy*p.y + A.zz*p.z};
       r.x -= Ap.x; r.y -= Ap.y; r.z -= Ap.z;
       Vector r0 = r;
       double sum = 0.;
@@ -148,7 +154,10 @@ static double partcl2partcl(FF *ff, int N, Vector *force, Vector *position,
       for (p.x = - pxlim; p.x <= pxlim; p.x++)
         for (p.y = - pylim; p.y <= pylim; p.y++)
           for (p.z = - pzlim; p.z <= pzlim; p.z++){
-            Ap = prod(A, p);
+            //Ap = prod(A, p);
+            Ap.x = A.xx*p.x + A.xy*p.y + A.xz*p.z;
+            Ap.y = A.yx*p.x + A.yy*p.y + A.yz*p.z;
+            Ap.z = A.zx*p.x + A.zy*p.y + A.zz*p.z;
             r.x = r0.x + Ap.x; r.y = r0.y + Ap.y; r.z = r0.z + Ap.z;
             double r2 = r.x*r.x + r.y*r.y + r.z*r.z;
             if (r2 < a_0*a_0){
@@ -177,7 +186,10 @@ static void anterpolate(FF *ff, Triple gd, double *q, int N, double *charge,
   int nu = ff->orderAcc;
   for (int i = 0; i < N; i++){
     Vector ri = r[i];
-    Vector s = prod(Ai, ri);
+    //Vector s = prod(Ai, ri);
+    Vector s = {Ai.xx*ri.x + Ai.xy*ri.y + Ai.xz*ri.z,
+                Ai.yx*ri.x + Ai.yy*ri.y + Ai.yz*ri.z,
+                Ai.zx*ri.x + Ai.zy*ri.y + Ai.zz*ri.z};
     s.x = s.x - floor(s.x);
     s.y = s.y - floor(s.y);
     s.z = s.z - floor(s.z);
@@ -225,7 +237,10 @@ static void interpolate(FF *ff, int N, Vector *E, Vector *r, Triple gd,
   for (int i = 0; i < N; i++){
     double Ex = 0., Ey = 0., Ez = 0.;
     Vector ri = r[i];
-    Vector s = prod(Ai, ri);
+    //Vector s = prod(Ai, ri);
+    Vector s = {Ai.xx*ri.x + Ai.xy*ri.y + Ai.xz*ri.z,
+                Ai.yx*ri.x + Ai.yy*ri.y + Ai.yz*ri.z,
+                Ai.zx*ri.x + Ai.zy*ri.y + Ai.zz*ri.z};
     Vector t = {(double)gd.x*s.x, (double)gd.y*s.y, (double)gd.z*s.z};
     Vector em = {floor(t.x), floor(t.y), floor(t.z)};
     t.x -= em.x, t.y -= em.y, t.z -= em.z;

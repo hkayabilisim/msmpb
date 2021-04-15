@@ -42,7 +42,10 @@ void neighborlist(FF *ff, int N, Vector *position){
   int *next = (int *)malloc(N*sizeof(int));
   for (int i = 0; i < N; i++){
     Vector ri = position[i];
-    Vector s = prod(Ai, ri);
+    //Vector s = prod(Ai, ri);
+    Vector s = {Ai.xx*ri.x + Ai.xy*ri.y + Ai.xz*ri.z,
+                Ai.yx*ri.x + Ai.yy*ri.y + Ai.yz*ri.z,
+                Ai.zx*ri.x + Ai.zy*ri.y + Ai.zz*ri.z};
     s.x = s.x - floor(s.x);
     s.y = s.y - floor(s.y);
     s.z = s.z - floor(s.z);
@@ -69,7 +72,10 @@ void neighborlist(FF *ff, int N, Vector *position){
     else
       off_xy *= -1.;}
   Vector t = {copysign(1., off_yz), copysign(1., off_zx),copysign(1., off_xy)};
-  Vector At = prod(A, t);
+  //Vector At = prod(A, t);
+  Vector At ={A.xx*t.x + A.xy*t.y + A.xz*t.z,
+              A.yx*t.x + A.yy*t.y + A.yz*t.z,
+              A.zx*t.x + A.zy*t.y + A.zz*t.z};
   Vector HAt = {At.x/(double)gd.x, At.y/(double)gd.y, At.z/(double)gd.z};
   double diam = sqrt(HAt.x*HAt.x + HAt.y*HAt.y + HAt.z*HAt.z);
   int nxlim = (int)ceil(as.x*(double)gd.x*a_0);
@@ -88,7 +94,10 @@ void neighborlist(FF *ff, int N, Vector *position){
       for (int nz = -nzd/2; nz < (nzd + 1)/2; nz++){
         Vector s = {(double)nx/(double)gd.x,
           (double)ny/(double)gd.y, (double)nz/(double)gd.z};
-        Vector r = prod(A, s);
+        //Vector r = prod(A, s);
+        Vector r ={A.xx*s.x + A.xy*s.y + A.xz*s.z,
+                   A.yx*s.x + A.yy*s.y + A.yz*s.z,
+                   A.zx*s.x + A.zy*s.y + A.zz*s.z};
         double normr = sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
         if (normr - diam < a_0){
           Triple nk = {nx, ny, nz};
@@ -127,9 +136,15 @@ void neighborlist(FF *ff, int N, Vector *position){
       Vector rj = position[j];
       Vector r = {rj.x - ri.x, rj.y - ri.y, rj.z - ri.z};
       // convert to nearest image
-      Vector s = prod(Ai, r);
+      //Vector s = prod(Ai, r);
+      Vector s = {Ai.xx*r.x + Ai.xy*r.y + Ai.xz*r.z,
+                  Ai.yx*r.x + Ai.yy*r.y + Ai.yz*r.z,
+                  Ai.zx*r.x + Ai.zy*r.y + Ai.zz*r.z};
       Vector p = {floor(s.x + 0.5), floor(s.y + 0.5), floor(s.z + 0.5)};
-      Vector Ap = prod(A, p);
+      //Vector Ap = prod(A, p);
+      Vector Ap ={A.xx*p.x + A.xy*p.y + A.xz*p.z,
+                  A.yx*p.x + A.yy*p.y + A.yz*p.z,
+                  A.zx*p.x + A.zy*p.y + A.zz*p.z};
       r.x -= Ap.x; r.y -= Ap.y; r.z -= Ap.z;
       double distance2 = r.x*r.x + r.y*r.y + r.z*r.z;
       if (distance2 < a_02) {
@@ -191,12 +206,12 @@ void FF_build(FF *ff, double (*position)[3]){
   if (! ff->tolDir){
     ff->tolDir = 1.e-5;}
   
-	// calculate beta
-  // erfc(beta a_0)/a_0 = ff->tolDir/h_0  % EPBD05 omit 1/h_star
+  // calculate beta
+  // erfc(beta a_0)/a_0 = ff->tolDir as in EPBD05 and NAMD
   double a_0 = ff->cutoff;
   double pi = 4.*atan(1.);
   double hstar = pow(ff->detA/(double)N, 1./3.);
-	double const_ = ff->tolDir*a_0/hstar;
+  double const_ = ff->tolDir*a_0;
   double beta = 0.; // beta = beta*a_0 until after iteration
   double res = erfc(beta) - const_;
   double oldres = 2.*res;

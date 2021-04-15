@@ -43,7 +43,10 @@ void neighborlist(FF *ff, int N, Vector *position){
   int *next = (int *)malloc(N*sizeof(int));
   for (int i = 0; i < N; i++){
     Vector ri = position[i];
-    Vector s = prod(Ai, ri);
+    //Vector s = prod(Ai, ri);
+    Vector s = {Ai.xx*ri.x + Ai.xy*ri.y + Ai.xz*ri.z,
+                Ai.yx*ri.x + Ai.yy*ri.y + Ai.yz*ri.z,
+                Ai.zx*ri.x + Ai.zy*ri.y + Ai.zz*ri.z};
     s.x = s.x - floor(s.x);
     s.y = s.y - floor(s.y);
     s.z = s.z - floor(s.z);
@@ -70,7 +73,10 @@ void neighborlist(FF *ff, int N, Vector *position){
     else
       off_xy *= -1.;}
   Vector t = {copysign(1., off_yz), copysign(1., off_zx),copysign(1., off_xy)};
-  Vector At = prod(A, t);
+  //Vector At = prod(A, t);
+  Vector At ={A.xx*t.x + A.xy*t.y + A.xz*t.z,
+              A.yx*t.x + A.yy*t.y + A.yz*t.z,
+              A.zx*t.x + A.zy*t.y + A.zz*t.z};
   Vector HAt = {At.x/(double)gd.x, At.y/(double)gd.y, At.z/(double)gd.z};
   double diam = sqrt(HAt.x*HAt.x + HAt.y*HAt.y + HAt.z*HAt.z);
   int nxlim = (int)ceil(as.x*(double)gd.x*a_0);
@@ -89,7 +95,10 @@ void neighborlist(FF *ff, int N, Vector *position){
       for (int nz = -nzd/2; nz < (nzd + 1)/2; nz++){
         Vector s = {(double)nx/(double)gd.x,
           (double)ny/(double)gd.y, (double)nz/(double)gd.z};
-        Vector r = prod(A, s);
+        //Vector r = prod(A, s);
+        Vector r ={A.xx*s.x + A.xy*s.y + A.xz*s.z,
+                   A.yx*s.x + A.yy*s.y + A.yz*s.z,
+                   A.zx*s.x + A.zy*s.y + A.zz*s.z};
         double normr = sqrt(r.x*r.x + r.y*r.y + r.z*r.z);
         if (normr - diam < a_0){
           Triple nk = {nx, ny, nz};
@@ -128,9 +137,15 @@ void neighborlist(FF *ff, int N, Vector *position){
       Vector rj = position[j];
       Vector r = {rj.x - ri.x, rj.y - ri.y, rj.z - ri.z};
       // convert to nearest image
-      Vector s = prod(Ai, r);
+      //Vector s = prod(Ai, r);
+      Vector s = {Ai.xx*r.x + Ai.xy*r.y + Ai.xz*r.z,
+                  Ai.yx*r.x + Ai.yy*r.y + Ai.yz*r.z,
+                  Ai.zx*r.x + Ai.zy*r.y + Ai.zz*r.z};
       Vector p = {floor(s.x + 0.5), floor(s.y + 0.5), floor(s.z + 0.5)};
-      Vector Ap = prod(A, p);
+      //Vector Ap = prod(A, p);
+      Vector Ap ={A.xx*p.x + A.xy*p.y + A.xz*p.z,
+                  A.yx*p.x + A.yy*p.y + A.yz*p.z,
+                  A.zx*p.x + A.zy*p.y + A.zz*p.z};
       r.x -= Ap.x; r.y -= Ap.y; r.z -= Ap.z;
       double distance2 = r.x*r.x + r.y*r.y + r.z*r.z;
       if (distance2 < a_02) {
@@ -454,8 +469,42 @@ void FF_build(FF *ff, double (*position)[3]){
   if (strcmp(o.test, "nobuild") == 0) return;
   // compute stencils ff->khat[l]
   
-  
   Vector *r = (Vector *)position;
+
+  /*
+  // Ordering
+  msm4g_tic();
+  {
+
+  int gdx = ff->topGridDim[0], gdy = ff->topGridDim[1], gdz = ff->topGridDim[2];
+  for (int l = ff->maxLevel-1; l > 0; l--) {
+    gdx *= 2; gdy *= 2; gdz *= 2;
+  }
+  int *particleCount = (int *)calloc(gdx*gdy*gdz,sizeof(int));
+  for (int i = 0; i < N; i++){
+    Vector ri = r[i];
+    //Vector s = prod(Ai, ri);
+    Vector s = {Ai.xx*ri.x + Ai.xy*ri.y + Ai.xz*ri.z,
+                Ai.yx*ri.x + Ai.yy*ri.y + Ai.yz*ri.z,
+                Ai.zx*ri.x + Ai.zy*ri.y + Ai.zz*ri.z};
+    s.x = s.x - floor(s.x);
+    s.y = s.y - floor(s.y);
+    s.z = s.z - floor(s.z);
+    Vector t = {(double)gdx*s.x, (double)gdy*s.y, (double)gdz*s.z};
+    Vector em = {floor(t.x), floor(t.y), floor(t.z)};
+    t.x -= em.x, t.y -= em.y, t.z -= em.z;
+    Triple m = {(int)em.x, (int)em.y, (int)em.z};
+    int mindex = (m.x*gdy+m.y)*gdz + m.z;
+    printf("xxx %d %d\n",i,mindex);
+    particleCount[mindex] += 1;
+  }
+  //for (int i = 0 ; i < gdx*gdy*gdz; i++)
+  //  printf("cell %6d has %10d particles\n",i,particleCount[i]);
+  free(particleCount);
+  printf("ordering time: %f\n",msm4g_toc());
+  } // end of ordering
+  */
+  
   msm4g_tic();
   neighborlist(ff, N, r);
   ff->time_nlist = msm4g_toc();
@@ -935,26 +984,47 @@ static void kaphatA(FF *ff, int l, Triple gd, Triple sd, double kh[],
   //-(double)(end - o.time)/CLOCKS_PER_SEC, kdx*kdy*kdz);
   //begin = clock();
   //construct kappa hat element by element
-    for (int i1 = - sd.x/2; i1 <= (sd.x - 1)/2; i1++){
-      double *khi = kh + (i1 + sd.x/2)*sd.y*sd.z;
-      for (int j1 = - sd.y/2; j1 <= (sd.y - 1)/2; j1++){
-        double *khij = khi + (j1 + sd.y/2)*sd.z;
-        for (int k1 = - sd.z/2; k1 <= (sd.z - 1)/2; k1++){
-          double khijk = 0.;
-          for (int i0 = - kdx/2; i0 <= (kdx - 1)/2; i0++){
-            int i = (i0 - i1 + (3*gd.x)/2)%gd.x - gd.x/2;
-            double opi = op[0][abs(i)];
-            for (int j0 = - kdy/2; j0 <= (kdy - 1)/2; j0++){
-              int j = (j0 - j1 + (3*gd.y)/2)%gd.y - gd.y/2;
-              double opij = opi*op[1][abs(j)];
-              for (int k0 = - kdz/2; k0 <= (kdz - 1)/2; k0++){
-                int k = (k0 - k1 + (3*gd.z)/2)%gd.z - gd.z/2;
-                double opijk = opij*op[2][abs(k)];
-                double kapijk
-                  = kap[((i0 + kdx/2)*kdy + j0 + kdy/2)*kdz + k0 + kdz/2];
-                khijk += opijk*kapijk;
-              }}}
-          khij[k1 + sd.z/2] = khijk;}}}
+
+  // Operator along z-dimension 
+  double *F = (double *)calloc(kdx*kdy*sd.z,sizeof(double));
+  for (int i0 = - kdx/2; i0 <= (kdx - 1)/2; i0++){
+    for (int j0 = - kdy/2; j0 <= (kdy - 1)/2; j0++){
+      for (int k1 = - sd.z/2; k1 <= (sd.z - 1)/2; k1++){
+        double sum = 0.0;
+        for (int k0 = - kdz/2; k0 <= (kdz - 1)/2; k0++){
+          int k = (k0 - k1 + (3*gd.z)/2)%gd.z - gd.z/2;
+          double opk = op[2][abs(k)];
+          double kapvalue = kap[((i0 + kdx/2)*kdy + j0 + kdy/2)*kdz + k0 + kdz/2];
+          sum += opk * kapvalue; }
+        F[((i0 + kdx/2)*kdy + j0 + kdy/2)*sd.z + k1 + sd.z/2] = sum; }}}
+  
+  // Operator along y-dimension/
+  double *G = (double *)calloc(kdx*sd.y*sd.z,sizeof(double));
+  for (int i0 = - kdx/2; i0 <= (kdx - 1)/2; i0++){
+    for (int j1 = - sd.y/2; j1 <= (sd.y - 1)/2; j1++){
+      for (int k1 = - sd.z/2; k1 <= (sd.z - 1)/2; k1++){
+        double sum = 0.0;
+        for (int j0 = - kdy/2; j0 <= (kdy - 1)/2; j0++){
+          int j = (j0 - j1 + (3*gd.y)/2)%gd.y - gd.y/2;
+          double opj = op[1][abs(j)];
+          double kapvalue = F[((i0 + kdx/2)*kdy + j0 + kdy/2)*sd.z + k1 + sd.z/2];
+          sum += opj * kapvalue; }
+        G[((i0 + kdx/2)*sd.y + j1 + sd.y/2)*sd.z + k1 + sd.z/2] = sum; }}}
+         
+  // Operator along z-dimension
+  for (int i1 = - sd.x/2; i1 <= (sd.x - 1)/2; i1++){
+    for (int j1 = - sd.y/2; j1 <= (sd.y - 1)/2; j1++){
+      for (int k1 = - sd.z/2; k1 <= (sd.z - 1)/2; k1++){
+        double sum = 0.0;
+        for (int i0 = - kdx/2; i0 <= (kdx - 1)/2; i0++){
+          int i = (i0 - i1 + (3*gd.x)/2)%gd.x - gd.x/2;
+          double opi = op[0][abs(i)];
+          double kapvalue = G[((i0 + kdx/2)*sd.y + j1 + sd.y/2)*sd.z + k1 + sd.z/2];
+          sum += opi * kapvalue ; }
+        kh[((i1 + sd.x/2)*sd.y + j1 + sd.y/2)*sd.z + k1 + sd.z/2] = sum; }}}
+  free(F);
+  free(G);
+
   free(kap);
   //end = clock();
   //-printf("elapsed time = %f, iterations = %d\n",
