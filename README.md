@@ -1,58 +1,35 @@
 Introduction
 ------------
-[This Code Ocean capsule](https://codeocean.com/capsule/4293677/tree) is created to reproduce the results 
-presented in the following manuscript:
+This GitHub [repository](https://github.com/hkayabilisim/msmpb) contains up-date codes to implement
+the algorithms published in:
 
 H. Kaya, D. J. Hardy and R. D. Skeel, 
 "Multilevel Summation for Periodic Electrostatics Using B-Splines",
-Journal of Chemical Physics, submitted to Journal of Chemical Physics on 2020 December.
+The Journal of Chemical Physics 154(14):144105
 
-Please visit published Code Ocean capsule:
+An older version of the code we used at the publication time is also provided 
+as [a Code Ocean capsule](https://codeocean.com/capsule/4293677/tree) for those
+reader who want to recreate the figures and tables in the manuscript.
 
-Mapping
--------
-    Manuscript       Code Ocean Capsule
-    ----------       ------------------
-    Figure 1         Figure1.pdf
-                     Figure1.txt (data)
-    Figure 2         Figure2.pdf
-                     Figure2-training, Figure2-testing-txt (data)
-    Table I          Figure2.txt (fudgefactors)
-    Figure 3         an illustration: not presented here 
-    Figure 4         *Figure4.pdf
-                     *Figure4.txt (data)
-    Table III,IV     *Figure4.txt (in tabulated form)
-    Table V, VI      *AppendixF.txt (in tabulated form)
-    Table II         summary of Table V and VI: not presented here
-
-    * Please read explanation about timings 
-
-
-Timing
-------
-Please note that the timings produced in this capsule are slightly different than the ones
-presented in the manuscript. Timings in the manuscript are obtained by running 
-the code on a non-virtual environment with 
-4 GHz Intel Core i7 CPU with 32 GB 1600 MHz DDR3 memory. Whereas the timings in the
-capsule are obtained on containers running on AWS virtual machines. For this reason
-they are slightly lower than the ones in the manuscript.
+For more information please consult [Wiki](https://github.com/hkayabilisim/msmpb/wiki) page.
 
 Code
 ----
 * **forcefield.h, forcefield0.c, forcefield1.c**
-The implementation of the algorithm presented in the manuscript.  
+The implementation of the proposed algorithm.
+* **example.c** and **h20.dat**
+A simple driver and sample data for demonstration purposes.
 * **msmpb.c** 
-A driver to use the above code. It is a small standalone main file.
+Another driver with more features. 
 * **pme.h, pme0.c, pme1.c**
 A PME implementation to make comparions.
 * **pme.c**
-A driver to use PME codes. Its usage is very similar to msmpb.c.
+A driver to use PME implementation. Its usage is very similar to msmpb.c.
+* **journal** folder contains the scripts to produce the experiments in the journal paper.
 * **msmpb_util.py**
 A collection of Python wrappers to use MSM and PME.
-* **AppendixF.py, Figure1.py, Figure2.py, Figure4.py**
-Python codes to conduct the experiments in the manuscript. They use msmpb_util.py.
 * **Makefile** 
-Compiles MSM and PME source codes. 
+Compiles MSM and PME source codes and the drivers.
 * **run** 
 An entrypoint for the Code Ocean Capsule. 
 
@@ -68,9 +45,9 @@ Reproducing the Results
 -----------------------
 A published Code Ocean Capsule is already verified to be reproducible.
 If you also want to run the capsule one more time and get the results,
-you can use the tools provided in the Code Ocean's Web Site. 
-
-Alternatively, you can export the capsule and run on your environment. 
+you can use the tools provided in the Code Ocean's Web Site.  
 Please consult Code Ocean documentation for further information.
 
+Alternatively, you can run the scripts under the journal folder
+on your local environment.
 
