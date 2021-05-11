@@ -1,0 +1,12 @@
+.DS_Store
+code/.ipynb_checkpoints/
+code/__pycache__/
+code/journal/__pycache__/
+msmpb.xcodeproj/
+msmpb.acc
+msmpb.pot
+pme.acc
+pme.pot
+pme
+msmpb
+example
