@@ -9,7 +9,7 @@ The Journal of Chemical Physics 154(14):144105
 
 An older version of the code we used at the publication time is also provided 
 as [a Code Ocean capsule](https://codeocean.com/capsule/4293677/tree) for those
-reader who want to recreate the figures and tables in the manuscript.
+readers who want to recreate the figures and tables in the manuscript.
 
 For more information please consult [Wiki](https://github.com/hkayabilisim/msmpb/wiki) page.
 
