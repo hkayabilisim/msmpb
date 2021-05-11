@@ -1,4 +1,4 @@
-from msmpb_util import *  
+from msmpb_wrapper import *  
         
 data = [{'name':'spceN300' ,'N':300  ,'A':20},             
         {'name':'spceN600' ,'N':600  ,'A':20},             

@@ -9,7 +9,7 @@
 struct O o = {"csCl"}; // struct for optional output
 
 void usage() {
-  fprintf(stderr,"Usage: msm dataFile "
+  fprintf(stderr,"Usage: msmpb dataFile "
           "[--a0 cutoff] "
           "[--nu accuracyOrder] "
           "[-M grid-spacing] \n"

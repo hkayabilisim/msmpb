@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from msmpb_util import *
+from msmpb_wrapper import *
 import subprocess
 import json
 import pandas as pd

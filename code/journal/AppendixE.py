@@ -1,4 +1,4 @@
-from msmpb_util import *
+from msmpb_wrapper import *
 
 import sys
 
