@@ -45,20 +45,39 @@ def prevFFTFriendly(M):
         M = M - 1
     return M - 1
 
-def runMSM(benchmark,M,a0,nu,L=1):
+def runMSM(benchmark,M,a0,nu,L=1,bincoor=None,potfile=None,accfile=None):
     A = benchmark['A']
     name = benchmark['name'];
     N = benchmark['N']
     h = A / M;
     nbar = 2 * a0 / h;
-    out = subprocess.run(['./msmpb','../data/'+name,'-L',str(L),'--a0',str(a0),'--nu',str(nu),'-M',str(M)]\
-                     ,stdout=subprocess.PIPE)
+    
+    args = ['../msmpb','../../data/'+name,'-L',str(L),'--a0',str(a0),'--nu',str(nu),'-M',str(M)]
+    if bincoor is not None:
+        args.append('--bincoor')
+        args.append(bincoor)
+    if potfile is not None:
+        args.append('--potfile')
+        args.append(potfile)    
+    if accfile is not None:
+        args.append('--accfile')
+        args.append(accfile)
+    out = subprocess.run(args,stdout=subprocess.PIPE)
     return json.loads(out.stdout.decode("utf-8"))
 
-def runPME(benchmark,M,a0,nu):
+def runPME(benchmark,M,a0,nu,bincoor=None,potfile=None,accfile=None):
     name = benchmark['name'];
-    out = subprocess.run(['./pme','../data/'+name,'--a0',str(a0),'--nu',str(nu),'-M',str(M)]\
-                     ,stdout=subprocess.PIPE)
+    args = ['../pme','../../data/'+name,'--a0',str(a0),'--nu',str(nu),'-M',str(M)]
+    if bincoor is not None:
+        args.append('--bincoor')
+        args.append(bincoor)
+    if potfile is not None:
+        args.append('--potfile')
+        args.append(potfile)    
+    if accfile is not None:
+        args.append('--accfile')
+        args.append(accfile)
+    out = subprocess.run(args, stdout=subprocess.PIPE)
     return json.loads(out.stdout.decode("utf-8"))
 
 

@@ -44,13 +44,13 @@ print("Fudge factors (training)")
 print(fudgefactors)
 
 print("Training -- (fudgefactors applied!)")
-displayResult(training,fudgefactors,"../results/Figure2-training.txt")
+displayResult(training,fudgefactors,"../../results/Figure2-training.txt")
 print("Testing -- (fudgefactors applied!)")
-displayResult(testing,fudgefactors,"../results/Figure2-testing.txt")
+displayResult(testing,fudgefactors,"../../results/Figure2-testing.txt")
 
 
-trn = pd.read_csv('../results/Figure2-training.txt',delim_whitespace=True)
-tst = pd.read_csv('../results/Figure2-testing.txt',delim_whitespace=True)
+trn = pd.read_csv('../../results/Figure2-training.txt',delim_whitespace=True)
+tst = pd.read_csv('../../results/Figure2-testing.txt',delim_whitespace=True)
 
 trntst = pd.concat([trn,tst])
 data = [trn,trntst]
@@ -77,5 +77,5 @@ for i in [0,1]:
     ax.legend()
     #ax.axis('equal')
 
-fig.savefig('../results/Figure2.pdf', dpi=100)
+fig.savefig('../../results/Figure2.pdf', dpi=100)
  

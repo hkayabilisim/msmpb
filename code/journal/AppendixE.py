@@ -1,5 +1,9 @@
 from msmpb_util import *
 
+import sys
+
+sys.stdout = open("../../results/AppendixE.txt", "w")
+
 experiments = [{"L": 1, "nu": 4, "M": [80, 84, 90, 96,100]},
                {"L": 1, "nu": 6, "M": [80, 84, 90, 96,100]},
                {"L": 2, "nu": 4, "M": [40, 42, 48, 50, 54]},
@@ -36,7 +40,6 @@ for experiment in experiments:
         print("%1d %2d %10d %4.2f %6.3f %8.3f %8.3e"%(L,  nu,  M, h1,   a0,   time,error))
         
         
-print("----- Appendix F ------")
 for order in [4,6]:
     print("Order is %d"%order)
     for level in [1,2,3]:
@@ -56,3 +59,4 @@ for order in [4,6]:
               
                 
     
+sys.stdout.close()

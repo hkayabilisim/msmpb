@@ -18,11 +18,11 @@
 #include "forcefield.h"
 
 
-void neighborlist(FF *ff, int N, Vector *position){
+void neighborlist(FF *ff, int N, Vector *position, double margin){
   int interaction_count = 0;
   Matrix A = *(Matrix *)ff->A;
   Matrix Ai = *(Matrix *)ff->Ai;
-  double a_0 = ff->aCut[0];
+  double a_0 = ff->aCut[0] + margin;
   double a_02 = a_0 * a_0;
   Vector as = {sqrt(Ai.xx*Ai.xx + Ai.yx*Ai.yx + Ai.zx*Ai.zx),
     sqrt(Ai.xy*Ai.xy + Ai.yy*Ai.yy + Ai.zy*Ai.zy),
@@ -34,7 +34,6 @@ void neighborlist(FF *ff, int N, Vector *position){
   int *nlist = (int *) calloc(nlist_len, sizeof(int));
   ff->nlist = nlist;
   ff->nlist_len = nlist_len;
-  
   // create hash table
   Triple gd = {ceil(pow(N,1./3.)),ceil(pow(N,1./3.)),ceil(pow(N,1./3.))};
   int gd_prod = gd.x*gd.y*gd.z;
@@ -150,7 +149,9 @@ void neighborlist(FF *ff, int N, Vector *position){
       double distance2 = r.x*r.x + r.y*r.y + r.z*r.z;
       if (distance2 < a_02) {
         interaction_count++;
+        if (nlist_idx >= nlist_len) printf("error\n");
         nlist[nlist_idx++] = j;
+        
       }
     }
     nlist[nlist_idx++] = -1;
@@ -162,16 +163,13 @@ void neighborlist(FF *ff, int N, Vector *position){
   ff->nlist_interaction_count = interaction_count;
 }
 
-FF *FF_new(int N, double *q, double edges[3][3]){
+FF *FF_new(int N, double *q){
   FF *ff = (FF *)calloc(1, sizeof(FF));
 #ifndef NO_FFT
   ff->FFT = true;
 #endif
   ff->N = N;
   ff->q = q;
-  for (int i = 0 ; i < 3; i++)
-    for (int j = 0 ; j < 3; j++)
-      ff->A[i][j] = edges[i][j];
   ff->maxLevel = -1;
   ff->orderAcc = -1;
   ff->topGridDim[0] = -1;
@@ -270,19 +268,21 @@ void determineM(FF *ff,int L,int *Mout) {
   Mout[2] = ceil(Msz);
 }
 
-void FF_build(FF *ff, double (*position)[3]){
+void FF_build(FF *ff, int N, double (*position)[3],double edges[3][3], double margin){
+  ff->ntc = 7;
+  ff->tmax = 4;
   // N: number of particles
   // edges: columns are vectors defining parallelpiped
-  int N = ff->N;
   for (int i = 0 ; i < 3; i++)
-    for (int j = 0 ; j < 3; j++)
-      ff->Ai[i][j] = ff->A[i][j];
+    for (int j = 0 ; j < 3; j++) {
+      ff->A[i][j] = edges[i][j];
+      ff->Ai[i][j] = edges[i][j];
+    }
   Matrix A = *(Matrix *)ff->A;
   Matrix Ai = *(Matrix *)ff->Ai;
-
   ff->detA = invert(&Ai);
   *(Matrix *)ff->Ai = Ai;
-  
+
   // Default error tolerance
   if (ff->estErr == -1) ff->estErr = 0.001;
   
@@ -469,7 +469,6 @@ void FF_build(FF *ff, double (*position)[3]){
   if (strcmp(o.test, "nobuild") == 0) return;
   // compute stencils ff->khat[l]
   
-  Vector *r = (Vector *)position;
 
   /*
   // Ordering
@@ -505,10 +504,7 @@ void FF_build(FF *ff, double (*position)[3]){
   } // end of ordering
   */
   
-  msm4g_tic();
-  neighborlist(ff, N, r);
-  ff->time_nlist = msm4g_toc();
-  FF_rebuild(ff,ff->A,position);
+  FF_rebuild(ff,edges,position,margin);
 }
 
 // for each computational parameter
@@ -599,19 +595,26 @@ static void kaphatA(FF *ff, int l, Triple gd, Triple sd, double kh[],
                     Vector as);
 static void DFT(Triple gd, double dL[], double khatL[]);
 static void FFT(FF *ff, Triple gd, double dL[], double khatL[]);
-void FF_rebuild(FF *ff, double edges[3][3], double (*r)[3]) {
-  *(Matrix *)ff->A = *(Matrix *)edges;
+void FF_rebuild(FF *ff, double edges[3][3], double (*r)[3], double margin) {
+  // N: number of particles
+  // edges: columns are vectors defining parallelpiped
+  for (int i = 0 ; i < 3; i++)
+    for (int j = 0 ; j < 3; j++) {
+      ff->A[i][j] = edges[i][j];
+      ff->Ai[i][j] = ff->A[i][j];
+    }
   Matrix A = *(Matrix *)ff->A;
+  Matrix Ai = *(Matrix *)ff->Ai;
+  double detA = invert(&Ai);
+  ff->detA = detA;
+  *(Matrix *)ff->Ai = Ai;
+
   // calculate coeffs for const part of energy
   double *tau = ff->tau;
   int nu = ff->orderAcc;
   double a_0 = ff->aCut[0];
   int L = ff->maxLevel;
   double aL=ff->aCut[L];
-  Matrix Ai = *(Matrix *)edges;
-  double detA = invert(&Ai);
-  *(Matrix *)ff->Ai = Ai;
-  ff->detA = detA ;
   Vector as = {sqrt(Ai.xx*Ai.xx + Ai.yx*Ai.yx + Ai.zx*Ai.zx),
                sqrt(Ai.xy*Ai.xy + Ai.yy*Ai.yy + Ai.zy*Ai.zy),
                sqrt(Ai.xz*Ai.xz + Ai.yz*Ai.yz + Ai.zz*Ai.zz)};
@@ -670,6 +673,10 @@ void FF_rebuild(FF *ff, double edges[3][3], double (*r)[3]) {
     //:::printf("l = %d, elapsed time = %f\n",
     //:::      l, (double)(end - o.time)/CLOCKS_PER_SEC);
   }
+
+  msm4g_tic();
+  neighborlist(ff, ff->N, (Vector *)r, margin);
+  ff->time_nlist = msm4g_toc();
 }
 
 void FF_delete(FF *ff) {

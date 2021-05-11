@@ -67,14 +67,14 @@ typedef struct FF {
   double time_prolongation[10];
   double time_padding[10];
 } FF;
-FF *FF_new(int N, double *q, double edges[3][3]);
+FF *FF_new(int N, double *q);
 double FF_get_cutoff(FF *ff);
 void FF_set_cutoff(FF *ff, double cutoff);
 void FF_set_orderAcc(FF *ff, int orderAcc);
 void FF_set_maxLevel(FF *ff, int maxLevel);
 void FF_set_topGridDim(FF *ff, int topGridDim[3]);
 void FF_set_FFT(FF *ff, bool FFT);
-void FF_build(FF *ff, double (*position)[3]);
+void FF_build(FF *ff,int N, double (*position)[3],double edges[3][3],double margin);
 int FF_get_orderAcc(FF *ff);
 int FF_get_maxLevel(FF *ff);
 void FF_get_topGridDim(FF *ff, int topGridDim[3]);
@@ -82,7 +82,7 @@ bool FF_get_FFT(FF *ff);
 double FF_get_errEst(FF *ff);
 double FF_get_estErr(FF *ff);
 void FF_set_estErr(FF *ff,double estErr);
-void FF_rebuild(FF *ff, double edges[3][3], double (*position)[3]);
+void FF_rebuild(FF *ff, double edges[3][3], double (*position)[3], double margin);
 double FF_energy(FF *ff, double (*force)[3], double (*position)[3], double *weight);
   // if weights == NULL, unit weights are assumed; otherwise
   // weights should point to an array of length FF_get_maxLevel(ff) + 1

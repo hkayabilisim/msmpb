@@ -16,8 +16,6 @@ void usage() {
           "[-L numberOfLevels] "
           "[--perturb]\n"
           "[--repl replx reply replz]\n"
-          "[--ntc numberOfTaylorTerms]\n"
-          "[--tmax tmax]\n"
           "[--edge a11 a12 a13 a21 a22 a23 a31 a32 a33]\n"
           "[--bincoor file]\n"
           "[--potfile .pot file]\n"
@@ -32,7 +30,6 @@ int main(int argc, char **argv){
     usage();
   }
  
-  
   int M[3] = {0, 0, 0};
   double energy;
   double edge[3][3], edge_in[3][3];
@@ -46,8 +43,6 @@ int main(int argc, char **argv){
   double perturbx = 0.0;
   double perturby = 0.0;
   double perturbz = 0.0;
-  int ntc = 7;
-  int tmax = 4;
   bool perturb = false;
   bool readbincoor = false;
   int replx = 1; int reply = 1; int replz = 1;
@@ -73,10 +68,6 @@ int main(int argc, char **argv){
       replx = atoi(argv[i+1]);
       reply = atoi(argv[i+2]);
       replz = atoi(argv[i+3]);
-    } else if (strcmp(argv[i],"--tmax") == 0) {
-        tmax = atoi(argv[i+1]);
-    } else if (strcmp(argv[i],"--ntc") == 0) {
-        ntc = atoi(argv[i+1]);
     } else if (strcmp(argv[i],"--edge") == 0) {
       edge_in[0][0] = atof(argv[i+1]);
       edge_in[0][1] = atof(argv[i+2]);
@@ -176,15 +167,14 @@ int main(int argc, char **argv){
   }
   
   o.e = (double *)malloc((L+1)*sizeof(double));
-  FF *ff = FF_new(Nrep,q,edge);
+  FF *ff = FF_new(Nrep,q);
   if (L > 0) FF_set_maxLevel(ff, L);
   if (Mtop > 0) FF_set_topGridDim(ff, M);
   if (nu > 0) FF_set_orderAcc(ff, nu);
   if (a0 > 0) FF_set_cutoff(ff,a0);
-  ff->ntc = ntc;
-  ff->tmax = tmax;
   msm4g_tic();
-  FF_build(ff,r);
+  double margin = 0.0;
+  FF_build(ff,Nrep,r,edge,margin);
   double time_build = msm4g_toc();
   
   msm4g_tic();
@@ -249,6 +239,7 @@ int main(int argc, char **argv){
   printf("\"%s\" : %d,\n", "nlist_interaction_count",ff->nlist_interaction_count);
   printf("\"%s\" : %d,\n", "tmax",ff->tmax);
   printf("\"%s\" : %f,\n", "cutoff",FF_get_cutoff(ff));
+  printf("\"%s\" : %f,\n", "margin",margin);
   printf("\"%s\" : [%5.2f, %5.2f, %5.2f],\n", "Edge row1",
            edge[0][0],edge[0][1],edge[0][2]);
   printf("\"%s\" : [%5.2f, %5.2f, %5.2f],\n", "Edge row2",

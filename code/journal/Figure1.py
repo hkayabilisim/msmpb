@@ -20,14 +20,14 @@ a0 = np.zeros((len(results),1))
 nu = np.zeros((len(results),1))
 M = np.zeros((len(results),1))
 error = np.zeros((len(results),1))
-print("%4s %3s %8s %2s %10s"%("N","M","a0","nu","error"))
+print("%4s %3s %8s %8s %2s %10s"%("N","M","a0","M/a0","nu","error"))
 for i in range(len(results)):
     N[i] = results[i]["N"]
     a0[i] = results[i]["cutoff"]
     error[i] = results[i]["deltaF/Fref"]
     M[i] = results[i]["TopLevelMx"]
     nu[i] = results[i]["nu"]
-    print("%4d %3d %8.3f %2d %10.3e"%(N[i],M[i],a0[i],nu[i],error[i]))
+    print("%4d %3d %8.3f %8.3f %2d %10.3e"%(N[i],M[i],a0[i],M[i]/a0[i],nu[i],error[i]))
 
 
 
@@ -53,9 +53,9 @@ for order in [4,6,8,10]:
     ax.set_xticklabels(['2','3','4'])
     ax.set_ylabel('relative force error')
     ax.set_xlabel(r'$M/N^{1/3}$')
-    ax.legend()
+    ax.legend(loc='upper right')
     ax.set_title(r'$\nu=%d$'%order)
     ax.grid(b=True, which='both',linestyle='dotted',color='lightgrey')
 fig.tight_layout(pad=1.0)       
-fig.savefig('../results/Figure1.pdf', dpi=100)
+fig.savefig('../../results/Figure1.pdf', dpi=100)
 
