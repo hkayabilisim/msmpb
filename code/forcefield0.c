@@ -29,7 +29,7 @@ void neighborlist(FF *ff, int N, Vector *position, double margin){
     sqrt(Ai.xz*Ai.xz + Ai.yz*Ai.yz + Ai.zz*Ai.zz)};
   double pi = 4.*atan(1.);
   int nlist_idx = 0;
-  int nlist_len = 3*N + 2.1 * ((4.0/3.0)*pi*a_0*a_0*a_0*0.5*N*(N-1.0)/ff->detA);
+  int nlist_len = 200*N + 2.1 * ((4.0/3.0)*pi*a_0*a_0*a_0*0.5*N*(N-1.0)/ff->detA);
   ff->nlist_len = nlist_len;
   int *nlist = (int *) calloc(nlist_len, sizeof(int));
   ff->nlist = nlist;
